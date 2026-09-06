@@ -161,12 +161,46 @@ class MetricsRecord:
     acquisition_time: float = 0.0
     avg_tracking_error: float = 0.0
     max_tracking_error: float = 0.0
+    rmse_tracking_error: float = 0.0
     lock_retention_rate: float = 0.0
     per_frame_processing_time_ms: float = 0.0
     total_frames: int = 0
+    active_locked_frames: int = 0
+    coasting_frames: int = 0
     track_loss_count: int = 0
     active_tracker_breakdown: Dict[str, float] = field(default_factory=dict)
+    stage_timing_breakdown: Dict[str, float] = field(default_factory=dict)
+    scenario_name: str = ""
+    is_held_out: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize metrics to dictionary for easy JSON/CSV export or GUI consumption."""
         return asdict(self)
+
+
+@dataclass
+class ReacquisitionZone:
+    """
+    Kinematically forward-projected search zone for predictive target re-acquisition.
+
+    Attributes:
+        center_pan: Forward-projected horizontal center in radians.
+        center_tilt: Forward-projected vertical center in radians.
+        search_radius: Uncertainty radius of the predicted search zone in radians.
+        predicted_velocity: Estimated velocity (vx, vy) in rad/s used for projection.
+        projection_time_s: Total time delta (seconds) elapsed since last validated track.
+        pan_bounds: Minimum and maximum pan boundaries (pan_min, pan_max) in radians.
+        tilt_bounds: Minimum and maximum tilt boundaries (tilt_min, tilt_max) in radians.
+    """
+    center_pan: float
+    center_tilt: float
+    search_radius: float
+    predicted_velocity: Tuple[float, float]
+    projection_time_s: float
+    pan_bounds: Tuple[float, float]
+    tilt_bounds: Tuple[float, float]
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize reacquisition zone to dictionary."""
+        return asdict(self)
+
