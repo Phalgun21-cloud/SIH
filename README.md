@@ -79,9 +79,33 @@ Exportable quantitative benchmark record for reporting and dashboards.
 
 ---
 
+## 🚀 Quickstart & Setup
+
+1. **Install Dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **Install Backend in Editable Mode** (allows importing `contracts`, `sim`, `detect`, `track`, etc. from any script):
+   ```bash
+   pip install -e .
+   ```
+
+3. **Launch the Visual Telemetry Simulator UI**:
+   ```bash
+   python verify_ui.py
+   ```
+
+4. **Run the Extended Combined-Stress Benchmark**:
+   ```bash
+   python run_demo.py
+   ```
+
+---
+
 ## 🧪 Running Tests
 
-To verify all data contracts and module skeletons:
+To run the complete automated test suite (57 unit tests across all modules):
 ```bash
 python -m unittest discover -s tests
 ```
