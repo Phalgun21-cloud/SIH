@@ -172,6 +172,7 @@ class MetricsRecord:
     stage_timing_breakdown: Dict[str, float] = field(default_factory=dict)
     scenario_name: str = ""
     is_held_out: bool = False
+    pipeline_errors: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize metrics to dictionary for easy JSON/CSV export or GUI consumption."""

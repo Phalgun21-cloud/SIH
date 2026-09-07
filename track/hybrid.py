@@ -10,13 +10,15 @@ Implements dynamic estimator switching with hysteresis:
 - Logs all transition events with detailed technical triggers to MetricsLogger
 """
 
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any, TYPE_CHECKING
 import numpy as np
 from contracts import TargetState, CameraState
 from track.kalman import ConstantVelocityKalmanFilter
 from track.particle import ParticleFilter
 from track.severity import SeverityCalculator
-from metrics.logger import MetricsLogger, SwitchEvent
+
+if TYPE_CHECKING:
+    from metrics.logger import MetricsLogger, SwitchEvent
 
 
 class HybridTracker:

@@ -125,6 +125,9 @@ class ConstantVelocityKalmanFilter:
             P = (I - K * H) * P
         Higher severity increases measurement covariance R, trusting measurements less.
         """
+        if not (np.isfinite(meas_x) and np.isfinite(meas_y)):
+            return self.get_state()
+
         if not self.is_initialized:
             self.init_state(meas_x, meas_y, timestamp=self.timestamp)
             return self.get_state()
@@ -148,21 +151,33 @@ class ConstantVelocityKalmanFilter:
         # Innovation covariance S
         S = self.H @ self.P @ self.H.T + R_adaptive
 
-        # Near-optimal Kalman Gain K
-        K = self.P @ self.H.T @ np.linalg.inv(S)
-
-        # State update
-        self.x = self.x + K @ y
-
-        # Joseph form covariance update for numerical stability: P = (I - K*H) * P * (I - K*H)^T + K * R * K^T
-        I = np.eye(4, dtype=np.float64)
-        IKH = I - K @ self.H
-        self.P = IKH @ self.P @ IKH.T + K @ R_adaptive @ K.T
-
-        self.consecutive_coasts = 0
-        self.mode = "KF"
-
-        return self.get_state()
+        # Near-optimal Kalman Gain K with singular matrix protection
+        try:
+            K = self.P @ self.H.T @ np.linalg.inv(S)
+            new_x = self.x + K @ y
+            if np.all(np.isfinite(new_x)):
+                self.x = new_x
+                # Joseph form covariance update for numerical stability
+                I = np.eye(4, dtype=np.float64)
+                IKH = I - K @ self.H
+                self.P = IKH @ self.P @ IKH.T + K @ R_adaptive @ K.T
+                self.consecutive_coasts = 0
+                self.mode = "KF"
+                return self.get_state()
+            else:
+                raise np.linalg.LinAlgError("Non-finite state encountered in update")
+        except np.linalg.LinAlgError:
+            self.mode = "COAST"
+            self.consecutive_coasts += 1
+            return TargetState(
+                x=float(self.x[0, 0]),
+                y=float(self.x[1, 0]),
+                vx=float(self.x[2, 0]),
+                vy=float(self.x[3, 0]),
+                confidence=0.2,
+                timestamp=self.timestamp,
+                tracker_mode="COAST",
+            )
 
     def step(
         self,
@@ -173,17 +188,24 @@ class ConstantVelocityKalmanFilter:
     ) -> TargetState:
         """
         Unified predict-update cycle with explicit confidence threshold gating and real-time noise adaptation.
-        If measurement is None or confidence < min_valid_confidence, runs in COAST mode (predict-only).
+        If measurement is None, non-finite, or confidence < min_valid_confidence, runs in COAST mode (predict-only).
         """
         # Always run predict (with severity adaptation for process noise Q)
         pred_state = self.predict(dt, severity=severity)
 
-        # Explicit confidence threshold gate (rejects spurious noise detections)
-        if measurement is not None and confidence >= self.min_valid_confidence:
+        # Explicit finite measurement and confidence threshold gate
+        is_finite_meas = (
+            measurement is not None
+            and len(measurement) >= 2
+            and np.isfinite(measurement[0])
+            and np.isfinite(measurement[1])
+        )
+
+        if is_finite_meas and confidence >= self.min_valid_confidence:
             # Measurement valid and above confidence gate: correct state with severity-adapted R
-            return self.update(measurement[0], measurement[1], confidence=confidence, severity=severity)
+            return self.update(float(measurement[0]), float(measurement[1]), confidence=confidence, severity=severity)
         else:
-            # No measurement or below confidence gate: enter/continue coast mode
+            # No measurement, non-finite, or below confidence gate: enter/continue coast mode
             self.consecutive_coasts += 1
             self.mode = "COAST"
             # State confidence degrades with coasting duration

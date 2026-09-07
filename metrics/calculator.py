@@ -36,6 +36,7 @@ class MetricsCalculator:
         scenario_name: str = "",
         is_held_out: bool = False,
         stage_timings: Optional[Dict[str, List[float]]] = None,
+        pipeline_errors: int = 0,
     ) -> MetricsRecord:
         """
         Compute a complete MetricsRecord from a MetricsLogger instance and wall-clock times.
@@ -48,6 +49,7 @@ class MetricsCalculator:
             is_held_out: Flag indicating whether scenario is a held-out test case.
             stage_timings: Dictionary of stage execution times list in milliseconds.
                            e.g. {'detection_ms': [...], 'tracking_ms': [...], 'control_ms': [...]}
+            pipeline_errors: Number of caught pipeline exceptions during run.
 
         Returns:
             MetricsRecord populated with all verified statistics.
@@ -60,6 +62,7 @@ class MetricsCalculator:
             scenario_name=scenario_name,
             is_held_out=is_held_out,
             stage_timings=stage_timings,
+            pipeline_errors=pipeline_errors,
         )
 
     def compute_metrics(
@@ -71,6 +74,7 @@ class MetricsCalculator:
         scenario_name: str = "",
         is_held_out: bool = False,
         stage_timings: Optional[Dict[str, List[float]]] = None,
+        pipeline_errors: int = 0,
     ) -> MetricsRecord:
         """
         Compute MetricsRecord from frame records list and profiler timestamps.
@@ -177,4 +181,5 @@ class MetricsCalculator:
             stage_timing_breakdown=stage_breakdown,
             scenario_name=scenario_name,
             is_held_out=is_held_out,
+            pipeline_errors=pipeline_errors,
         )

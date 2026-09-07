@@ -42,9 +42,14 @@ class BatchScenarioRunner:
     a configurable matrix of environmental and kinematic disturbance scenarios.
     """
 
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: Optional[str] = None, use_hybrid_tracker: bool = False):
         """
         Initialize the runner with a configuration file path or auto-detect default.
+        
+        Args:
+            config_path: Path to scenarios JSON configuration.
+            use_hybrid_tracker: If True, uses HybridTracker (adaptive KF/PF switching);
+                                If False (default), uses standalone ConstantVelocityKalmanFilter.
         """
         if config_path is None:
             # Auto-detect default config path
@@ -57,8 +62,10 @@ class BatchScenarioRunner:
         else:
             self.config_path = config_path
 
+        self.use_hybrid_tracker = use_hybrid_tracker
         self.calculator = MetricsCalculator()
         self.results: List[MetricsRecord] = []
+        self.last_logger: Optional[MetricsLogger] = None
 
     def load_scenarios(self) -> List[Dict[str, Any]]:
         """Load scenario specifications from JSON config file."""
@@ -67,16 +74,18 @@ class BatchScenarioRunner:
         with open(self.config_path, "r", encoding="utf-8") as f:
             return json.load(f)
 
-    def run_scenario(self, scenario_cfg: Dict[str, Any]) -> MetricsRecord:
+    def run_scenario(self, scenario_cfg: Dict[str, Any], use_hybrid_tracker: Optional[bool] = None) -> MetricsRecord:
         """
         Execute a single scenario through the full closed-loop PAT pipeline with per-stage timing.
 
         Args:
             scenario_cfg: Scenario configuration dictionary.
+            use_hybrid_tracker: Optional override for tracker mode (Hybrid vs standalone KF).
 
         Returns:
             Populated MetricsRecord with quantitative error, retention, and latency metrics.
         """
+        enable_hybrid = self.use_hybrid_tracker if use_hybrid_tracker is None else use_hybrid_tracker
         name = scenario_cfg.get("scenario_name", "UNKNOWN_SCENARIO")
         is_held_out = scenario_cfg.get("is_held_out", False)
         num_frames = int(scenario_cfg.get("num_frames", 50))
@@ -93,7 +102,7 @@ class BatchScenarioRunner:
         vib_amp = float(dist_cfg.get("vibration_amplitude", 0.0003))
         vib_freq = float(dist_cfg.get("vibration_frequency", 10.0))
         noise_std = float(dist_cfg.get("noise_level", 4.0))
-        occ_cfg = dist_cfg.get("occlusion")
+        seed = int(scenario_cfg.get("seed", 42))
 
         ctrl_cfg = scenario_cfg.get("control", {})
         kp = float(ctrl_cfg.get("kp", 0.35))
@@ -127,21 +136,29 @@ class BatchScenarioRunner:
             enable_auto_exposure=True,
         )
 
-        turb = KolmogorovTurbulence(cn2=cn2, seed=42) if cn2 > 0 else None
-        vib = PlatformVibration(amplitude_rad=vib_amp, frequency_hz=vib_freq, random_walk_std=vib_amp * 0.1) if vib_amp > 0 else None
-        noise = SensorNoise(gaussian_std=noise_std) if noise_std > 0 else None
+        turb = KolmogorovTurbulence(cn2=cn2, seed=seed) if cn2 > 0 else None
+        vib = PlatformVibration(amplitude_rad=vib_amp, frequency_hz=vib_freq, random_walk_std=vib_amp * 0.1, seed=seed) if vib_amp > 0 else None
+        noise = SensorNoise(gaussian_std=noise_std, seed=seed) if noise_std > 0 else None
 
-        occluder = None
-        occ_start, occ_end = -1, -1
-        if occ_cfg:
-            occluder = DynamicOccluder(
-                initial_pos=init_pos,
-                velocity=vel,
-                radius_rad=float(occ_cfg.get("radius_rad", 0.008)),
-                opacity=float(occ_cfg.get("opacity", 1.0)),
-            )
-            occ_start = int(occ_cfg.get("start_frame", 10))
-            occ_end = int(occ_cfg.get("end_frame", 25))
+        # Build list of scheduled dynamic occluders (supporting both single and multiple occlusions)
+        scheduled_occluders: List[Tuple[int, int, DynamicOccluder]] = []
+        raw_occs: List[Dict[str, Any]] = []
+        if dist_cfg.get("occlusion"):
+            raw_occs.append(dist_cfg["occlusion"])
+        if dist_cfg.get("occlusions"):
+            raw_occs.extend(dist_cfg["occlusions"])
+
+        for occ_item in raw_occs:
+            if isinstance(occ_item, dict):
+                occ_obj = DynamicOccluder(
+                    initial_pos=init_pos,
+                    velocity=vel,
+                    radius_rad=float(occ_item.get("radius_rad", 0.008)),
+                    opacity=float(occ_item.get("opacity", 1.0)),
+                )
+                start_f = int(occ_item.get("start_frame", 10))
+                end_f = int(occ_item.get("end_frame", 25))
+                scheduled_occluders.append((start_f, end_f, occ_obj))
 
         env = Environment(
             target=target,
@@ -153,8 +170,16 @@ class BatchScenarioRunner:
         )
 
         # Core pipeline components
+        logger = MetricsLogger()
         detector = AdaptiveOpticalDetector(enable_signature_verification=False)
-        kf = ConstantVelocityKalmanFilter(min_valid_confidence=0.40)
+        if enable_hybrid:
+            from track.hybrid import HybridTracker
+            tracker = HybridTracker(logger=logger, min_valid_confidence=0.40)
+            kf = None
+        else:
+            kf = ConstantVelocityKalmanFilter(min_valid_confidence=0.40)
+            tracker = None
+
         slew = SlewRateLimiter(max_velocity=max_vel, max_acceleration=max_acc)
         delay_queue = ControlDelayQueue(delay_frames=latency_frames)
         pid = PIDController(kp=kp, ki=ki, kd=kd, k_ff=k_ff, enable_feedforward=True)
@@ -167,7 +192,6 @@ class BatchScenarioRunner:
         )
         classifier = TrackLossClassifier()
         zone_predictor = ReacquisitionZonePredictor()
-        logger = MetricsLogger()
 
         stage_timings: Dict[str, List[float]] = {
             "rendering_ms": [],
@@ -187,22 +211,26 @@ class BatchScenarioRunner:
         consecutive_misses = 0
         delayed_p, delayed_t = 0.0, 0.0
         kf_init = False
+        pipeline_errors = 0
 
         wall_start = time.perf_counter()
 
         for f in range(num_frames):
             # Dynamic occlusion injection
-            is_occluded = (occ_start <= f <= occ_end) if occluder else False
-            if is_occluded and occluder:
-                env.occluders = [occluder]
-                active_occ = occluder
-            else:
-                env.occluders = []
-                active_occ = None
+            active_occluders = [occ for (s, e, occ) in scheduled_occluders if s <= f <= e]
+            env.occluders = active_occluders
+            active_occ = active_occluders[0] if active_occluders else None
 
             # 1. Physical Camera Step & Optical Frame Rendering + Disturbances
-            act_p, act_t = slew.apply_limit(delayed_p, delayed_t, dt)
-            frame, tgt_state, cam_state = env.step(dt, act_p, act_t)
+            try:
+                act_p, act_t = slew.apply_limit(delayed_p, delayed_t, dt)
+                frame, tgt_state, cam_state = env.step(dt, act_p, act_t)
+            except Exception:
+                pipeline_errors += 1
+                from contracts import FrameData
+                frame = FrameData(image=np.zeros((480, 640), dtype=np.uint8), timestamp=f * dt, frame_id=f)
+                tgt_state = TargetState(x=init_pos[0], y=init_pos[1])
+                cam_state = camera.state
 
             prof = getattr(env, "last_step_profile", {})
             stage_timings["rendering_ms"].append(prof.get("rendering_ms", 0.0))
@@ -214,104 +242,136 @@ class BatchScenarioRunner:
 
             # 2. Optical Detection Stage (Timed)
             t_det0 = time.perf_counter_ns()
-            det, _ = detector.detect(frame)
+            try:
+                det, _ = detector.detect(frame)
+            except Exception:
+                pipeline_errors += 1
+                det = None
             t_det1 = time.perf_counter_ns()
             stage_timings["detection_ms"].append((t_det1 - t_det0) * 1e-6)
 
             # 3. Tracking & State Estimation Stage (Timed)
             t_trk0 = time.perf_counter_ns()
-            # Confidence gating (reject below 0.40)
-            is_valid_det = (det is not None and det.confidence >= 0.40)
+            try:
+                # Confidence gating (reject below 0.40)
+                is_valid_det = (det is not None and getattr(det, "confidence", 0.0) >= 0.40)
 
-            if is_valid_det:
-                consecutive_misses = 0
-                err_p, err_t = camera.pixel_to_angular_error(det.x, det.y)
-                wx, wy = cam_state.pan + err_p, cam_state.tilt + err_t
+                if is_valid_det:
+                    consecutive_misses = 0
+                    err_p, err_t = camera.pixel_to_angular_error(det.x, det.y)
+                    wx, wy = cam_state.pan + err_p, cam_state.tilt + err_t
+                    if not (np.isfinite(wx) and np.isfinite(wy)):
+                        raise ValueError(f"Non-finite coordinates: ({wx}, {wy})")
 
-                if not kf_init:
-                    kf.init_state(wx, wy, 0.0, 0.0, timestamp=frame.timestamp)
-                    kf_init = True
-                    est = kf.get_state()
+                    if enable_hybrid:
+                        est = tracker.step(dt, (wx, wy), det.confidence, cn2=cn2, frame_id=f)
+                    else:
+                        if not kf_init:
+                            kf.init_state(wx, wy, 0.0, 0.0, timestamp=frame.timestamp)
+                            kf_init = True
+                            est = kf.get_state()
+                        else:
+                            est = kf.step(dt, (wx, wy), det.confidence)
+
+                    if est is not None and not (np.isfinite(est.x) and np.isfinite(est.y)):
+                        raise ValueError(f"Non-finite estimate: ({est.x}, {est.y})")
+
+                    last_known_state = est
+
+                    if state == "SEARCHING":
+                        state = "REACQUIRED"
+                        reacq_ctrl.reset()
                 else:
-                    est = kf.step(dt, (wx, wy), det.confidence)
-                last_known_state = est
+                    consecutive_misses += 1
+                    if enable_hybrid:
+                        est = tracker.step(dt, None, 0.0, cn2=cn2, frame_id=f)
+                    else:
+                        if kf_init:
+                            est = kf.step(dt, None, 0.0)
+                        else:
+                            est = None
 
-                if state == "SEARCHING":
-                    state = "REACQUIRED"
-                    reacq_ctrl.reset()
-            else:
+                    # Declare full track loss upon 8 consecutive misses after lock was established
+                    if state == "TRACKING" and consecutive_misses >= 8 and last_known_state is not None:
+                        state = "SEARCHING"
+                        computed_zone = zone_predictor.compute_zone(
+                            last_known_state,
+                            frame.timestamp,
+                            (camera.state.fov_x, camera.state.fov_y),
+                        )
+                        cause, conf, rat = classifier.classify(
+                            consecutive_misses,
+                            last_known_state,
+                            cam_state,
+                            active_occluder=active_occ,
+                            active_cn2=cn2,
+                            target_true_pos=(tgt_state.x, tgt_state.y),
+                        )
+                        reacq_ctrl.start_reacquisition(computed_zone, cam_state)
+                        logger.log_track_loss_event(
+                            frame_id=f,
+                            timestamp=frame.timestamp,
+                            cause=cause,
+                            confidence=conf,
+                            severity=1.0,
+                            last_known_pos=(last_known_state.x, last_known_state.y),
+                            last_known_vel=(last_known_state.vx, last_known_state.vy),
+                            predicted_zone=computed_zone.to_dict(),
+                            rationale=rat,
+                        )
+            except Exception:
+                pipeline_errors += 1
+                est = last_known_state
                 consecutive_misses += 1
-                if kf_init:
-                    est = kf.step(dt, None, 0.0)
-                else:
-                    est = None
-
-                # Declare full track loss upon 8 consecutive misses after lock was established
-                if state == "TRACKING" and consecutive_misses >= 8 and last_known_state is not None:
-                    state = "SEARCHING"
-                    computed_zone = zone_predictor.compute_zone(
-                        last_known_state,
-                        frame.timestamp,
-                        (camera.state.fov_x, camera.state.fov_y),
-                    )
-                    cause, conf, rat = classifier.classify(
-                        consecutive_misses,
-                        last_known_state,
-                        cam_state,
-                        active_occluder=active_occ,
-                        active_cn2=cn2,
-                        target_true_pos=(tgt_state.x, tgt_state.y),
-                    )
-                    reacq_ctrl.start_reacquisition(computed_zone, cam_state)
-                    logger.log_track_loss_event(
-                        frame_id=f,
-                        timestamp=frame.timestamp,
-                        cause=cause,
-                        confidence=conf,
-                        severity=1.0,
-                        last_known_pos=(last_known_state.x, last_known_state.y),
-                        last_known_vel=(last_known_state.vx, last_known_state.vy),
-                        predicted_zone=computed_zone.to_dict(),
-                        rationale=rat,
-                    )
             t_trk1 = time.perf_counter_ns()
             stage_timings["tracking_ms"].append((t_trk1 - t_trk0) * 1e-6)
 
             # 4. Control Command Computation Stage (Timed)
             t_ctl0 = time.perf_counter_ns()
-            if state in ["TRACKING", "REACQUIRED"] and est is not None:
-                c_p, c_t = pid.compute_command(est, cam_state, dt)
-            elif state == "SEARCHING":
-                c_p, c_t = reacq_ctrl.step(dt, cam_state)
-            else:
-                c_p, c_t = 0.0, 0.0
+            try:
+                if state in ["TRACKING", "REACQUIRED"] and est is not None:
+                    c_p, c_t = pid.compute_command(est, cam_state, dt)
+                elif state == "SEARCHING":
+                    c_p, c_t = reacq_ctrl.step(dt, cam_state)
+                else:
+                    c_p, c_t = 0.0, 0.0
 
-            delayed_p, delayed_t = delay_queue.step(c_p, c_t)
+                if not (np.isfinite(c_p) and np.isfinite(c_t)):
+                    c_p, c_t = 0.0, 0.0
+
+                delayed_p, delayed_t = delay_queue.step(c_p, c_t)
+            except Exception:
+                pipeline_errors += 1
+                delayed_p, delayed_t = 0.0, 0.0
             t_ctl1 = time.perf_counter_ns()
             stage_timings["control_ms"].append((t_ctl1 - t_ctl0) * 1e-6)
 
             # 5. Telemetry & Metrics Overhead (Timed)
             t_log0 = time.perf_counter_ns()
-            _, _, rad_err_rad = env.get_angular_tracking_error()
-            rad_err_mrad = rad_err_rad * 1e3
-            logger.log_frame({
-                "frame_id": f,
-                "timestamp": frame.timestamp,
-                "state": state,
-                "tracker_mode": est.tracker_mode if est is not None else "LOST",
-                "detected": is_valid_det,
-                "confidence": det.confidence if det is not None else 0.0,
-                "radial_error_mrad": rad_err_mrad,
-                "cam_pan_mrad": cam_state.pan * 1e3,
-                "cam_tilt_mrad": cam_state.tilt * 1e3,
-                "tgt_pan_mrad": tgt_state.x * 1e3,
-                "tgt_tilt_mrad": tgt_state.y * 1e3,
-            })
+            try:
+                _, _, rad_err_rad = env.get_angular_tracking_error()
+                rad_err_mrad = rad_err_rad * 1e3
+                logger.log_frame({
+                    "frame_id": f,
+                    "timestamp": frame.timestamp,
+                    "state": state,
+                    "tracker_mode": est.tracker_mode if est is not None else "LOST",
+                    "detected": is_valid_det,
+                    "confidence": det.confidence if det is not None else 0.0,
+                    "radial_error_mrad": rad_err_mrad,
+                    "cam_pan_mrad": cam_state.pan * 1e3,
+                    "cam_tilt_mrad": cam_state.tilt * 1e3,
+                    "tgt_pan_mrad": tgt_state.x * 1e3,
+                    "tgt_tilt_mrad": tgt_state.y * 1e3,
+                })
+            except Exception:
+                pipeline_errors += 1
             t_log1 = time.perf_counter_ns()
             stage_timings["logging_ms"].append((t_log1 - t_log0) * 1e-6)
 
         wall_end = time.perf_counter()
 
+        self.last_logger = logger
         record = self.calculator.compute_from_logger(
             logger=logger,
             start_wall_time=wall_start,
@@ -319,6 +379,7 @@ class BatchScenarioRunner:
             scenario_name=name,
             is_held_out=is_held_out,
             stage_timings=stage_timings,
+            pipeline_errors=pipeline_errors,
         )
         return record
 
@@ -375,6 +436,7 @@ class BatchScenarioRunner:
             "tracking_ms",
             "control_ms",
             "logging_ms",
+            "pipeline_errors",
         ]
 
         with open(filepath, "w", newline="", encoding="utf-8") as f:
@@ -389,6 +451,7 @@ class BatchScenarioRunner:
                 row["tracking_ms"] = f"{st.get('tracking_ms', 0.0):.3f}"
                 row["control_ms"] = f"{st.get('control_ms', 0.0):.3f}"
                 row["logging_ms"] = f"{st.get('logging_ms', 0.0):.3f}"
+                row["pipeline_errors"] = r.pipeline_errors
                 writer.writerow(row)
 
     def format_results_table(self) -> str:
