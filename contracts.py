@@ -8,9 +8,57 @@ for consumption by frontend/GUI dashboards.
 """
 
 from __future__ import annotations
+import os
+import sys
 from dataclasses import dataclass, field, asdict
 from typing import Optional, Tuple, Dict, Any, Union, List
 import numpy as np
+
+
+def get_resource_path(relative_path: str) -> str:
+    """
+    Resolves the absolute path to a resource file, compatible with development,
+    package installation, and PyInstaller bundled distribution.
+    """
+    if not relative_path:
+        return ""
+
+    rel_path = os.path.normpath(str(relative_path))
+
+    # 1. Already existing absolute path
+    if os.path.isabs(rel_path) and os.path.exists(rel_path):
+        return rel_path
+
+    # 2. PyInstaller temporary extraction directory (sys._MEIPASS for --onefile / --onedir)
+    if hasattr(sys, "_MEIPASS"):
+        meipass_candidate = os.path.join(sys._MEIPASS, rel_path)
+        if os.path.exists(meipass_candidate):
+            return os.path.abspath(meipass_candidate)
+
+    # 3. PyInstaller frozen application directory (alongside executable in --onedir)
+    if getattr(sys, "frozen", False):
+        exe_dir = os.path.dirname(sys.executable)
+        exe_candidate = os.path.join(exe_dir, rel_path)
+        if os.path.exists(exe_candidate):
+            return os.path.abspath(exe_candidate)
+
+    # 4. Project root directory (where contracts.py resides)
+    project_root = os.path.dirname(os.path.abspath(__file__))
+    proj_candidate = os.path.join(project_root, rel_path)
+    if os.path.exists(proj_candidate):
+        return os.path.abspath(proj_candidate)
+
+    # 5. Current working directory
+    cwd_candidate = os.path.join(os.getcwd(), rel_path)
+    if os.path.exists(cwd_candidate):
+        return os.path.abspath(cwd_candidate)
+
+    # Fallback: return path anchored to project root or executable dir
+    if getattr(sys, "frozen", False):
+        return os.path.abspath(os.path.join(os.path.dirname(sys.executable), rel_path))
+    if hasattr(sys, "_MEIPASS"):
+        return os.path.abspath(os.path.join(sys._MEIPASS, rel_path))
+    return os.path.abspath(proj_candidate)
 
 
 @dataclass

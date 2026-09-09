@@ -12,10 +12,17 @@ on genuine real-world and unfamiliar synthetic footage:
 
 from __future__ import annotations
 import os
+import sys
 import json
+from pathlib import Path
 from typing import Dict, Any, List
 import numpy as np
 import cv2
+
+# Ensure project root is on sys.path when invoked directly as a script
+_root = str(Path(__file__).resolve().parent.parent)
+if _root not in sys.path:
+    sys.path.insert(0, _root)
 
 from detect.detector import AdaptiveOpticalDetector
 from sim.video_source import VideoFrameSource

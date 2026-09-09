@@ -26,8 +26,7 @@ import numpy as np
 import tkinter as tk
 from tkinter import ttk
 
-from contracts import FrameData, TargetState, CameraState, MetricsRecord, normalize_scenario_targets
-from resources import get_resource_path
+from contracts import FrameData, TargetState, CameraState, MetricsRecord, normalize_scenario_targets, get_resource_path
 from sim.target import Target
 from sim.camera import Camera
 from sim.environment import Environment

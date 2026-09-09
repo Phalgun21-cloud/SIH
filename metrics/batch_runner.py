@@ -16,8 +16,7 @@ import time
 from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
 
-from contracts import MetricsRecord, TargetState, normalize_scenario_targets
-from resources import get_resource_path
+from contracts import MetricsRecord, TargetState, normalize_scenario_targets, get_resource_path
 from sim.target import Target
 from sim.camera import Camera
 from sim.environment import Environment

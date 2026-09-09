@@ -8,8 +8,7 @@ import os
 from typing import Optional, Iterator, Tuple
 import cv2
 import numpy as np
-from contracts import FrameData
-from resources import get_resource_path
+from contracts import FrameData, get_resource_path
 
 
 class VideoFrameSource:
