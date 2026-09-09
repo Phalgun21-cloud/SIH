@@ -152,5 +152,54 @@
       "enable_predictive_search": true,
       "tier1_budget_frames": 25
     }
+  },
+  {
+    "scenario_name": "DEMO_MULTI_TARGET_PAT",
+    "category": "live_demo",
+    "seed": 505,
+    "description": "Two simultaneous moving targets with distinct blink signatures (4 Hz vs 8 Hz). Camera tracks primary target while detecting all targets in FOV.",
+    "num_frames": 100,
+    "dt": 0.033,
+    "primary_target_id": "target_alpha",
+    "targets": [
+      {
+        "target_id": "target_alpha",
+        "initial_pos": [0.008, 0.004],
+        "velocity": [0.002, 0.001],
+        "blink_frequency": 4.0,
+        "base_intensity": 220.0,
+        "modulation_depth": 0.5,
+        "distance_km": 5.0
+      },
+      {
+        "target_id": "target_beta",
+        "initial_pos": [-0.006, -0.004],
+        "velocity": [-0.001, 0.001],
+        "blink_frequency": 8.0,
+        "base_intensity": 220.0,
+        "modulation_depth": 0.5,
+        "distance_km": 6.0
+      }
+    ],
+    "disturbances": {
+      "cn2": 1.0e-15,
+      "vibration_amplitude": 0.0002,
+      "vibration_frequency": 10.0,
+      "noise_level": 3.0,
+      "occlusion": null
+    },
+    "control": {
+      "kp": 0.35,
+      "ki": 0.0,
+      "kd": 0.15,
+      "k_ff": 1.0,
+      "latency_frames": 2,
+      "max_velocity": 0.5,
+      "max_acceleration": 1.0
+    },
+    "reacquisition": {
+      "enable_predictive_search": true,
+      "tier1_budget_frames": 25
+    }
   }
 ]

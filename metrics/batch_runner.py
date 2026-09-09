@@ -16,7 +16,7 @@ import time
 from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
 
-from contracts import MetricsRecord
+from contracts import MetricsRecord, TargetState, normalize_scenario_targets
 from sim.target import Target
 from sim.camera import Camera
 from sim.environment import Environment
@@ -91,11 +91,12 @@ class BatchScenarioRunner:
         num_frames = int(scenario_cfg.get("num_frames", 50))
         dt = float(scenario_cfg.get("dt", 0.033))
 
-        tgt_cfg = scenario_cfg.get("target", {})
-        init_pos = tuple(tgt_cfg.get("initial_pos", [0.010, -0.005]))
-        vel = tuple(tgt_cfg.get("velocity", [0.003, -0.002]))
-        base_intensity = float(tgt_cfg.get("base_intensity", 220.0))
-        dist_km = float(tgt_cfg.get("distance_km", 5.0))
+        targets_cfg, primary_target_id = normalize_scenario_targets(scenario_cfg)
+        primary_cfg = next((t for t in targets_cfg if t.get("target_id") == primary_target_id), targets_cfg[0])
+        init_pos = tuple(primary_cfg.get("initial_pos", [0.010, -0.005]))
+        vel = tuple(primary_cfg.get("velocity", [0.003, -0.002]))
+        base_intensity = float(primary_cfg.get("base_intensity", 220.0))
+        dist_km = float(primary_cfg.get("distance_km", primary_cfg.get("range_km", 5.0)))
 
         dist_cfg = scenario_cfg.get("disturbances", {})
         cn2 = float(dist_cfg.get("cn2", 1.0e-14))
@@ -118,15 +119,8 @@ class BatchScenarioRunner:
         tier1_budget = int(reacq_cfg.get("tier1_budget_frames", 25))
 
         # Instantiate simulation objects
-        target = Target(
-            initial_pos=init_pos,
-            velocity=vel,
-            base_intensity=base_intensity,
-            blink_frequency=4.0,
-            modulation_depth=0.5,
-            range_km=dist_km,
-            ref_range_km=5.0,
-        )
+        targets = [Target.from_config(t) for t in targets_cfg]
+        target = next((t for t in targets if t.target_id == primary_target_id), targets[0])
         camera = Camera(
             pan=0.0,
             tilt=0.0,
@@ -139,6 +133,18 @@ class BatchScenarioRunner:
         turb = KolmogorovTurbulence(cn2=cn2, seed=seed) if cn2 > 0 else None
         vib = PlatformVibration(amplitude_rad=vib_amp, frequency_hz=vib_freq, random_walk_std=vib_amp * 0.1, seed=seed) if vib_amp > 0 else None
         noise = SensorNoise(gaussian_std=noise_std, seed=seed) if noise_std > 0 else None
+
+        # Check frame source mode
+        frame_source = scenario_cfg.get("frame_source", "synthetic")
+        video_path = scenario_cfg.get("video_path", None)
+        video_source = None
+        if frame_source == "video_file":
+            from sim.video_source import VideoFrameSource
+            video_source = VideoFrameSource(video_path)
+            if "dt" not in scenario_cfg and video_source.fps > 0:
+                dt = 1.0 / video_source.fps
+            if "num_frames" not in scenario_cfg and video_source.total_frames > 0:
+                num_frames = video_source.total_frames
 
         # Build list of scheduled dynamic occluders (supporting both single and multiple occlusions)
         scheduled_occluders: List[Tuple[int, int, DynamicOccluder]] = []
@@ -162,16 +168,24 @@ class BatchScenarioRunner:
 
         env = Environment(
             target=target,
+            targets=targets,
+            primary_target_id=primary_target_id,
             camera=camera,
             turbulence=turb,
             vibration=vib,
             sensor_noise=noise,
             occluders=[],
+            frame_source=frame_source,
+            video_source=video_source,
         )
 
         # Core pipeline components
         logger = MetricsLogger()
-        detector = AdaptiveOpticalDetector(enable_signature_verification=False)
+        detector = AdaptiveOpticalDetector(
+            enable_signature_verification=False,
+            targets=targets,
+            primary_target_id=primary_target_id,
+        )
         if enable_hybrid:
             from track.hybrid import HybridTracker
             tracker = HybridTracker(logger=logger, min_valid_confidence=0.40)
@@ -229,7 +243,7 @@ class BatchScenarioRunner:
                 pipeline_errors += 1
                 from contracts import FrameData
                 frame = FrameData(image=np.zeros((480, 640), dtype=np.uint8), timestamp=f * dt, frame_id=f)
-                tgt_state = TargetState(x=init_pos[0], y=init_pos[1])
+                tgt_state = TargetState(x=init_pos[0], y=init_pos[1]) if frame_source != "video_file" else None
                 cam_state = camera.state
 
             prof = getattr(env, "last_step_profile", {})
@@ -350,7 +364,7 @@ class BatchScenarioRunner:
             t_log0 = time.perf_counter_ns()
             try:
                 _, _, rad_err_rad = env.get_angular_tracking_error()
-                rad_err_mrad = rad_err_rad * 1e3
+                rad_err_mrad = (rad_err_rad * 1e3) if rad_err_rad is not None else None
                 logger.log_frame({
                     "frame_id": f,
                     "timestamp": frame.timestamp,
@@ -359,10 +373,10 @@ class BatchScenarioRunner:
                     "detected": is_valid_det,
                     "confidence": det.confidence if det is not None else 0.0,
                     "radial_error_mrad": rad_err_mrad,
-                    "cam_pan_mrad": cam_state.pan * 1e3,
-                    "cam_tilt_mrad": cam_state.tilt * 1e3,
-                    "tgt_pan_mrad": tgt_state.x * 1e3,
-                    "tgt_tilt_mrad": tgt_state.y * 1e3,
+                    "cam_pan_mrad": cam_state.pan * 1e3 if cam_state is not None else 0.0,
+                    "cam_tilt_mrad": cam_state.tilt * 1e3 if cam_state is not None else 0.0,
+                    "tgt_pan_mrad": (tgt_state.x * 1e3) if tgt_state is not None else None,
+                    "tgt_tilt_mrad": (tgt_state.y * 1e3) if tgt_state is not None else None,
                 })
             except Exception:
                 pipeline_errors += 1

@@ -26,7 +26,7 @@ import numpy as np
 import tkinter as tk
 from tkinter import ttk
 
-from contracts import FrameData, TargetState, CameraState, MetricsRecord
+from contracts import FrameData, TargetState, CameraState, MetricsRecord, normalize_scenario_targets
 from sim.target import Target
 from sim.camera import Camera
 from sim.environment import Environment
@@ -60,11 +60,13 @@ class SimulationSession:
         self.dt = float(scenario_cfg.get("dt", 0.033))
         self.seed = int(scenario_cfg.get("seed", 42))
 
-        tgt_cfg = scenario_cfg.get("target", {})
-        self.init_pos = tuple(tgt_cfg.get("initial_pos", [0.010, -0.005]))
-        self.vel = tuple(tgt_cfg.get("velocity", [0.003, -0.002]))
-        self.base_intensity = float(tgt_cfg.get("base_intensity", 220.0))
-        self.dist_km = float(tgt_cfg.get("distance_km", 5.0))
+        targets_cfg, self.primary_target_id = normalize_scenario_targets(scenario_cfg)
+        self.targets_cfg = targets_cfg
+        primary_cfg = next((t for t in self.targets_cfg if t.get("target_id") == self.primary_target_id), self.targets_cfg[0])
+        self.init_pos = tuple(primary_cfg.get("initial_pos", [0.010, -0.005]))
+        self.vel = tuple(primary_cfg.get("velocity", [0.003, -0.002]))
+        self.base_intensity = float(primary_cfg.get("base_intensity", 220.0))
+        self.dist_km = float(primary_cfg.get("distance_km", primary_cfg.get("range_km", 5.0)))
 
         dist_cfg = scenario_cfg.get("disturbances", {})
         self.cn2 = float(dist_cfg.get("cn2", 1.0e-14))
@@ -104,6 +106,8 @@ class SimulationSession:
         reacq_cfg = scenario_cfg.get("reacquisition", {})
         self.enable_pred = bool(reacq_cfg.get("enable_predictive_search", True))
         self.tier1_budget = int(reacq_cfg.get("tier1_budget_frames", 25))
+        self.frame_source = scenario_cfg.get("frame_source", "synthetic")
+        self.video_path = scenario_cfg.get("video_path", None)
 
         self.reset()
 
@@ -113,15 +117,8 @@ class SimulationSession:
         self.sim_time = 0.0
 
         # Physical simulator objects
-        self.target = Target(
-            initial_pos=self.init_pos,
-            velocity=self.vel,
-            base_intensity=self.base_intensity,
-            blink_frequency=4.0,
-            modulation_depth=0.5,
-            range_km=self.dist_km,
-            ref_range_km=5.0,
-        )
+        self.targets = [Target.from_config(t) for t in self.targets_cfg]
+        self.target = next((t for t in self.targets if t.target_id == self.primary_target_id), self.targets[0])
         self.camera = Camera(
             pan=0.0,
             tilt=0.0,
@@ -135,17 +132,32 @@ class SimulationSession:
         vib = PlatformVibration(amplitude_rad=self.vib_amp, frequency_hz=self.vib_freq, seed=self.seed) if self.vib_amp > 0 else None
         noise = SensorNoise(gaussian_std=self.noise_std, seed=self.seed) if self.noise_std > 0 else None
 
+        self.video_source = None
+        if self.frame_source == "video_file":
+            from sim.video_source import VideoFrameSource
+            self.video_source = VideoFrameSource(self.video_path)
+            if "dt" not in self.cfg and self.video_source.fps > 0:
+                self.dt = 1.0 / self.video_source.fps
+
         self.env = Environment(
             target=self.target,
+            targets=self.targets,
+            primary_target_id=self.primary_target_id,
             camera=self.camera,
             turbulence=turb,
             vibration=vib,
             sensor_noise=noise,
             occluders=[],
+            frame_source=self.frame_source,
+            video_source=self.video_source,
         )
 
         # Algorithmic modules
-        self.detector = AdaptiveOpticalDetector(enable_signature_verification=False)
+        self.detector = AdaptiveOpticalDetector(
+            enable_signature_verification=False,
+            targets=self.targets,
+            primary_target_id=self.primary_target_id,
+        )
         self.hybrid_tracker = HybridTracker(min_valid_confidence=0.40)
         self.slew = SlewRateLimiter(max_velocity=self.max_vel, max_acceleration=self.max_acc)
         self.delay_queue = ControlDelayQueue(delay_frames=self.latency_frames)
@@ -190,9 +202,14 @@ class SimulationSession:
         conf_val = float(det.confidence) if det is not None else 0.0
 
         # Check if target is inside camera FOV geometry
-        dx_cam = tgt_state.x - cam_state.pan
-        dy_cam = tgt_state.y - cam_state.tilt
-        target_in_fov = (abs(dx_cam) <= cam_state.fov_x / 2.0) and (abs(dy_cam) <= cam_state.fov_y / 2.0)
+        if tgt_state is not None:
+            dx_cam = tgt_state.x - cam_state.pan
+            dy_cam = tgt_state.y - cam_state.tilt
+            target_in_fov = (abs(dx_cam) <= cam_state.fov_x / 2.0) and (abs(dy_cam) <= cam_state.fov_y / 2.0)
+            tgt_true_pos = (tgt_state.x, tgt_state.y)
+        else:
+            target_in_fov = is_valid_det
+            tgt_true_pos = None
 
         # 3. State Estimation & Tracking
         if is_valid_det:
@@ -205,7 +222,8 @@ class SimulationSession:
             if self.state == "SEARCHING":
                 self.state = "REACQUIRED"
                 self.reacq_ctrl.reset()
-                event_msg = f"Frame {f}: Target REACQUIRED at ({tgt_state.x*1e3:.1f}, {tgt_state.y*1e3:.1f}) mrad"
+                pos_str = f" at ({tgt_state.x*1e3:.1f}, {tgt_state.y*1e3:.1f}) mrad" if tgt_state is not None else ""
+                event_msg = f"Frame {f}: Target REACQUIRED{pos_str}"
         else:
             self.consecutive_misses += 1
             est = self.hybrid_tracker.step(dt, None, 0.0, cn2=self.cn2, frame_id=f)
@@ -223,7 +241,7 @@ class SimulationSession:
                     cam_state,
                     active_occluder=active_occ,
                     active_cn2=self.cn2,
-                    target_true_pos=(tgt_state.x, tgt_state.y),
+                    target_true_pos=tgt_true_pos,
                 )
                 self.reacq_ctrl.start_reacquisition(self.computed_zone, cam_state)
                 event_msg = f"Frame {f}: TRACK LOST ({cause}) -> Predictive Zone Search"
@@ -249,7 +267,7 @@ class SimulationSession:
 
         # 5. Tracking Error Calculation
         _, _, rad_err_rad = self.env.get_angular_tracking_error()
-        rad_err_mrad = float(rad_err_rad * 1e3)
+        rad_err_mrad = float(rad_err_rad * 1e3) if rad_err_rad is not None else None
 
         occ_info = None
         if active_occ:
@@ -258,7 +276,7 @@ class SimulationSession:
         telemetry = {
             "frame_id": f,
             "sim_time": f * dt,
-            "target_pos": (tgt_state.x, tgt_state.y),
+            "target_pos": tgt_true_pos,
             "camera_pan_tilt": (cam_state.pan, cam_state.tilt),
             "fov_bounds": cam_state.fov_bounds,
             "is_valid_det": is_valid_det,
@@ -719,7 +737,7 @@ class VisualSimulatorUI:
         self.canvas.delete("all")
         self.draw_grid()
 
-        tgt_pan, tgt_tilt = data["target_pos"]
+        tgt_pos = data.get("target_pos")
         cam_pan, cam_tilt = data["camera_pan_tilt"]
         p_min, p_max, t_min, t_max = data["fov_bounds"]
         is_valid = data["is_valid_det"]
@@ -730,19 +748,22 @@ class VisualSimulatorUI:
         zone = data["reacq_zone"]
 
         # 1. Update Motion Trajectory History Trails
-        tgt_sx, tgt_sy = self.world_to_screen(tgt_pan, tgt_tilt)
         cam_sx, cam_sy = self.world_to_screen(cam_pan, cam_tilt)
-        self.target_history.append((tgt_sx, tgt_sy))
         self.camera_history.append((cam_sx, cam_sy))
 
-        # Draw Target Breadcrumb Trail (Dotted Green)
-        if len(self.target_history) >= 2:
-            pts = list(self.target_history)
-            for i in range(len(pts) - 1):
-                alpha = int(255 * (i + 1) / len(pts))
-                # Fade color towards head
-                col = "#155C3A" if i < len(pts) // 2 else "#00BA66"
-                self.canvas.create_line(pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1], fill=col, width=1, dash=(2, 2))
+        if tgt_pos is not None:
+            tgt_pan, tgt_tilt = tgt_pos
+            tgt_sx, tgt_sy = self.world_to_screen(tgt_pan, tgt_tilt)
+            self.target_history.append((tgt_sx, tgt_sy))
+
+            # Draw Target Breadcrumb Trail (Dotted Green)
+            if len(self.target_history) >= 2:
+                pts = list(self.target_history)
+                for i in range(len(pts) - 1):
+                    alpha = int(255 * (i + 1) / len(pts))
+                    # Fade color towards head
+                    col = "#155C3A" if i < len(pts) // 2 else "#00BA66"
+                    self.canvas.create_line(pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1], fill=col, width=1, dash=(2, 2))
 
         # Draw Camera Boresight Trail (Solid Cyan)
         if len(self.camera_history) >= 2:
@@ -782,29 +803,30 @@ class VisualSimulatorUI:
             self.canvas.create_oval(zx - zr, zy - zr, zx + zr, zy + zr, outline="#FFAA00", width=2, dash=(3, 2))
             self.canvas.create_text(zx, zy - zr - 8, text="TIER 1 PREDICTED ZONE", fill="#FFAA00", font=("Segoe UI", 7, "bold"))
 
-        # 5. Draw Target Marker
-        # Green if in FOV & verified, gray if occluded/lost, amber if unverified
-        if is_valid and in_fov:
-            tgt_fill = "#00FF88"
-            tgt_outline = "#FFFFFF"
-            tgt_label = "TARGET (LOCKED)"
-            r = 7
-        elif in_fov and not occ:
-            tgt_fill = "#FFAA00"
-            tgt_outline = "#FFDD66"
-            tgt_label = "TARGET (LOW CONF)"
-            r = 6
-        else:
-            tgt_fill = "#505C6C"
-            tgt_outline = "#7D8C9E"
-            tgt_label = "TARGET (OCCLUDED/LOST)"
-            r = 5
+        # 5. Draw Target Marker (if ground truth target exists)
+        if tgt_pos is not None:
+            # Green if in FOV & verified, gray if occluded/lost, amber if unverified
+            if is_valid and in_fov:
+                tgt_fill = "#00FF88"
+                tgt_outline = "#FFFFFF"
+                tgt_label = "TARGET (LOCKED)"
+                r = 7
+            elif in_fov and not occ:
+                tgt_fill = "#FFAA00"
+                tgt_outline = "#FFDD66"
+                tgt_label = "TARGET (LOW CONF)"
+                r = 6
+            else:
+                tgt_fill = "#505C6C"
+                tgt_outline = "#7D8C9E"
+                tgt_label = "TARGET (OCCLUDED/LOST)"
+                r = 5
 
-        # Target circle & halo
-        if is_valid:
-            self.canvas.create_oval(tgt_sx - r - 4, tgt_sy - r - 4, tgt_sx + r + 4, tgt_sy + r + 4, outline="#00FF88", width=1)
-        self.canvas.create_oval(tgt_sx - r, tgt_sy - r, tgt_sx + r, tgt_sy + r, fill=tgt_fill, outline=tgt_outline, width=1.5)
-        self.canvas.create_text(tgt_sx + 12, tgt_sy, text=tgt_label, fill=tgt_fill, font=("Segoe UI", 7, "bold"), anchor=tk.W)
+            # Target circle & halo
+            if is_valid:
+                self.canvas.create_oval(tgt_sx - r - 4, tgt_sy - r - 4, tgt_sx + r + 4, tgt_sy + r + 4, outline="#00FF88", width=1)
+            self.canvas.create_oval(tgt_sx - r, tgt_sy - r, tgt_sx + r, tgt_sy + r, fill=tgt_fill, outline=tgt_outline, width=1.5)
+            self.canvas.create_text(tgt_sx + 12, tgt_sy, text=tgt_label, fill=tgt_fill, font=("Segoe UI", 7, "bold"), anchor=tk.W)
 
         # 6. Draw Camera Boresight Reticle
         # CRITICAL: Visibly dim/gray out reticle when coasting blind!
@@ -864,8 +886,11 @@ class VisualSimulatorUI:
         # 3. Numeric counters
         self.lbl_frame_time.config(text=f"{f_id} / {total_f}  ({sim_t:.2f} s)")
 
-        err_col = "#00FF88" if err_mrad < 2.0 else ("#FFAA00" if err_mrad < 6.0 else "#FF4757")
-        self.lbl_error.config(text=f"{err_mrad:.3f} mrad", fg=err_col)
+        if err_mrad is not None:
+            err_col = "#00FF88" if err_mrad < 2.0 else ("#FFAA00" if err_mrad < 6.0 else "#FF4757")
+            self.lbl_error.config(text=f"{err_mrad:.3f} mrad", fg=err_col)
+        else:
+            self.lbl_error.config(text="N/A (No GT)", fg="#A0AEC0")
 
         # 4. Confidence Meter
         self.lbl_conf_val.config(text=f"{conf:.3f}")

@@ -2,7 +2,7 @@
 Virtual Pan-Tilt Gimbal Camera model rendering synthetic sensor frames with target and clutter spots.
 """
 
-from typing import Tuple, Optional, List, Any
+from typing import Tuple, Optional, List, Any, Dict, Union
 import numpy as np
 from contracts import CameraState, FrameData, TargetState
 
@@ -139,19 +139,21 @@ class Camera:
 
     def render_frame(
         self,
-        target_state: TargetState,
+        target_state: Optional[TargetState] = None,
         beacon_intensity: float = 220.0,
         clutter_objects: Optional[List[Any]] = None,
         frame_id: int = 0,
+        targets: Optional[List[Any]] = None,
     ) -> FrameData:
         """
-        Synthesize an optical sensor image frame with target beacon and optional clutter objects.
+        Synthesize an optical sensor image frame with target beacon(s) and optional clutter objects.
 
         Args:
-            target_state: True kinematic state of the target in world coordinates.
-            beacon_intensity: Modulated intensity of the optical beacon.
+            target_state: True kinematic state of the primary target in world coordinates.
+            beacon_intensity: Modulated intensity of the optical beacon (used if single target_state).
             clutter_objects: Optional list of ClutterObject instances in the scene.
             frame_id: Monotonically increasing frame index.
+            targets: Optional list of Target instances or (TargetState, intensity) tuples for multi-target rendering.
 
         Returns:
             FrameData containing synthesized image and metadata.
@@ -164,7 +166,6 @@ class Camera:
 
         # Apply auto-exposure / auto-gain if enabled
         gain = self.aec.gain if (self.enable_auto_exposure and self.aec) else 1.0
-        eff_beacon_intensity = beacon_intensity * gain
 
         # Render clutter objects if visible
         if clutter_objects:
@@ -173,10 +174,52 @@ class Camera:
                 if c_pixel is not None:
                     self._render_spot(image, c_pixel[0], c_pixel[1], clutter.current_intensity * gain)
 
-        # Render target beacon if visible
-        target_pixel = self.world_to_pixel(target_state.x, target_state.y)
-        if target_pixel is not None and eff_beacon_intensity > 0:
-            self._render_spot(image, target_pixel[0], target_pixel[1], eff_beacon_intensity)
+        ground_truth_targets: Dict[Union[str, int], Tuple[float, float]] = {}
+        primary_pixel: Optional[Tuple[float, float]] = None
+        frame_timestamp = 0.0
+
+        # Render multi-target list if provided
+        if targets:
+            for tgt in targets:
+                if hasattr(tgt, "get_state") and hasattr(tgt, "current_intensity"):
+                    t_state = tgt.get_state()
+                    t_intensity = tgt.current_intensity
+                elif isinstance(tgt, tuple) and len(tgt) == 2:
+                    t_state, t_intensity = tgt
+                elif isinstance(tgt, TargetState):
+                    t_state = tgt
+                    t_intensity = beacon_intensity
+                else:
+                    continue
+
+                eff_intensity = t_intensity * gain
+                t_pixel = self.world_to_pixel(t_state.x, t_state.y)
+                if t_pixel is not None:
+                    ground_truth_targets[t_state.target_id] = t_pixel
+                    if eff_intensity > 0:
+                        self._render_spot(image, t_pixel[0], t_pixel[1], eff_intensity)
+
+            # Designate primary target pixel
+            if target_state is not None:
+                primary_pixel = self.world_to_pixel(target_state.x, target_state.y)
+                frame_timestamp = target_state.timestamp
+            elif ground_truth_targets:
+                first_tgt = targets[0]
+                first_id = getattr(first_tgt, "target_id", None)
+                if first_id is None and isinstance(first_tgt, tuple):
+                    first_id = getattr(first_tgt[0], "target_id", "target_0")
+                primary_pixel = ground_truth_targets.get(first_id or "target_0")
+                frame_timestamp = getattr(targets[0], "timestamp", 0.0)
+
+        elif target_state is not None:
+            # Single-target fallback
+            eff_beacon_intensity = beacon_intensity * gain
+            target_pixel = self.world_to_pixel(target_state.x, target_state.y)
+            if target_pixel is not None and eff_beacon_intensity > 0:
+                self._render_spot(image, target_pixel[0], target_pixel[1], eff_beacon_intensity)
+                ground_truth_targets[target_state.target_id] = target_pixel
+            primary_pixel = target_pixel
+            frame_timestamp = target_state.timestamp
 
         # Update auto-exposure based on frame peak intensity (measured before clipping)
         if self.enable_auto_exposure and self.aec:
@@ -189,9 +232,10 @@ class Camera:
 
         return FrameData(
             image=image_uint8,
-            timestamp=target_state.timestamp,
+            timestamp=frame_timestamp,
             frame_id=frame_id,
-            ground_truth_target_pos=target_pixel,
+            ground_truth_target_pos=primary_pixel,
+            ground_truth_targets=ground_truth_targets if ground_truth_targets else None,
         )
 
     def apply_control(self, delta_pan: float, delta_tilt: float, dt: float = 0.033) -> None:

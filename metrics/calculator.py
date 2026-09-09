@@ -138,17 +138,22 @@ class MetricsCalculator:
 
         total_tracked = max(1, total_frames)
         active_tracker_breakdown = {k: float(v / total_tracked) for k, v in mode_counts.items()}
-        lock_retention_rate = float(active_locked_frames / total_tracked)
 
-        if tracking_errors:
+        has_ground_truth = (len(tracking_errors) > 0)
+
+        if has_ground_truth:
             err_arr = np.array(tracking_errors, dtype=np.float64)
             avg_tracking_error = float(np.mean(err_arr))
             max_tracking_error = float(np.max(err_arr))
             rmse_tracking_error = float(np.sqrt(np.mean(err_arr**2)))
+            lock_retention_rate = float(active_locked_frames / total_tracked)
         else:
-            avg_tracking_error = 0.0
-            max_tracking_error = 0.0
-            rmse_tracking_error = 0.0
+            avg_tracking_error = "N/A - no ground truth available"
+            max_tracking_error = "N/A - no ground truth available"
+            rmse_tracking_error = "N/A - no ground truth available"
+            # Without ground truth, compute lock retention as fraction of frames with a valid detection
+            valid_det_count = sum(1 for r in frame_records if r.get("detected", False))
+            lock_retention_rate = float(valid_det_count / total_tracked)
 
         if acquisition_frame is not None:
             acquisition_time = float(acquisition_frame * self.dt)
@@ -182,4 +187,5 @@ class MetricsCalculator:
             scenario_name=scenario_name,
             is_held_out=is_held_out,
             pipeline_errors=pipeline_errors,
+            has_ground_truth=has_ground_truth,
         )

@@ -9,7 +9,7 @@ for consumption by frontend/GUI dashboards.
 
 from __future__ import annotations
 from dataclasses import dataclass, field, asdict
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any, Union, List
 import numpy as np
 
 
@@ -22,27 +22,32 @@ class FrameData:
         image: 2D or 3D NumPy array representing the optical sensor readout.
         timestamp: Simulation time at frame exposure in seconds.
         frame_id: Monotonically increasing frame index.
-        ground_truth_target_pos: Optional (x, y) ground-truth target centroid in pixels.
+        ground_truth_target_pos: Optional (x, y) ground-truth target centroid in pixels for primary target.
+        ground_truth_targets: Optional mapping of target_id to (x, y) ground-truth centroid for all visible targets.
     """
     image: np.ndarray
     timestamp: float
     frame_id: int = 0
     ground_truth_target_pos: Optional[Tuple[float, float]] = None
+    ground_truth_targets: Optional[Dict[Union[str, int], Tuple[float, float]]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert metadata to dict (excludes large raw array for JSON safety)."""
-        return {
+        d = {
             "frame_id": self.frame_id,
             "timestamp": self.timestamp,
             "image_shape": list(self.image.shape) if self.image is not None else None,
             "ground_truth_target_pos": self.ground_truth_target_pos,
         }
+        if self.ground_truth_targets is not None:
+            d["ground_truth_targets"] = self.ground_truth_targets
+        return d
 
 
 @dataclass
 class TargetState:
     """
-    Estimated or ground-truth kinematic state of the optical beacon.
+    Estimated or ground-truth kinematic state of an optical beacon.
 
     Attributes:
         x: Position along horizontal axis (pixels in focal plane or angular coordinate).
@@ -52,6 +57,7 @@ class TargetState:
         confidence: Confidence score in [0.0, 1.0] indicating estimation quality.
         timestamp: Timestamp of the state estimate in seconds.
         tracker_mode: Active tracker mode identifier (e.g., 'KF', 'PF', 'COAST', 'LOST').
+        target_id: Target identifier (str or int) for multi-target tracking.
     """
     x: float
     y: float
@@ -60,10 +66,86 @@ class TargetState:
     confidence: float = 1.0
     timestamp: float = 0.0
     tracker_mode: str = "KF"
+    target_id: Union[str, int] = "target_0"
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize state to standard dictionary."""
         return asdict(self)
+
+
+@dataclass
+class TargetConfig:
+    """
+    Configuration specification for a single moving target beacon.
+    """
+    target_id: Union[str, int] = "target_0"
+    initial_pos: Tuple[float, float] = (0.010, -0.005)
+    velocity: Tuple[float, float] = (0.002, 0.001)
+    blink_frequency: float = 4.0
+    base_intensity: float = 220.0
+    modulation_depth: float = 0.5
+    range_km: float = 5.0
+    ref_range_km: float = 5.0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any], default_id: Union[str, int] = "target_0") -> TargetConfig:
+        pos = d.get("initial_pos", d.get("initial_position", [0.010, -0.005]))
+        vel = d.get("velocity", d.get("initial_velocity", [0.002, 0.001]))
+        return cls(
+            target_id=d.get("target_id", default_id),
+            initial_pos=tuple(pos) if isinstance(pos, (list, tuple)) else pos,
+            velocity=tuple(vel) if isinstance(vel, (list, tuple)) else vel,
+            blink_frequency=float(d.get("blink_frequency", 4.0)),
+            base_intensity=float(d.get("base_intensity", d.get("beacon_power", 220.0))),
+            modulation_depth=float(d.get("modulation_depth", 0.5)),
+            range_km=float(d.get("range_km", d.get("distance_km", 5.0))),
+            ref_range_km=float(d.get("ref_range_km", 5.0)),
+        )
+
+
+def normalize_scenario_targets(
+    scenario_cfg: Dict[str, Any]
+) -> Tuple[List[Dict[str, Any]], Union[str, int]]:
+    """
+    Normalize scenario configuration to support multi-target schema while maintaining
+    complete backward compatibility with legacy single-target scenarios.
+
+    Args:
+        scenario_cfg: Scenario configuration dictionary.
+
+    Returns:
+        (targets_list, primary_target_id)
+        - targets_list: List of target configuration dicts, each with target_id.
+        - primary_target_id: Identifier of the primary target camera should point at.
+    """
+    primary_target_id = scenario_cfg.get("primary_target_id", None)
+
+    # Multi-target schema: "targets" array
+    if "targets" in scenario_cfg and isinstance(scenario_cfg["targets"], list) and len(scenario_cfg["targets"]) > 0:
+        raw_targets = scenario_cfg["targets"]
+        targets_list: List[Dict[str, Any]] = []
+        for i, t in enumerate(raw_targets):
+            t_copy = dict(t)
+            if "target_id" not in t_copy:
+                t_copy["target_id"] = f"target_{i}"
+            targets_list.append(t_copy)
+        if primary_target_id is None:
+            primary_target_id = targets_list[0]["target_id"]
+        return targets_list, primary_target_id
+
+    # Backward compatibility: legacy single "target" object
+    raw_target = scenario_cfg.get("target", {})
+    t_copy = dict(raw_target)
+    if "target_id" not in t_copy:
+        t_copy["target_id"] = "target_0"
+    if primary_target_id is None:
+        primary_target_id = t_copy["target_id"]
+
+    return [t_copy], primary_target_id
+
 
 
 @dataclass
@@ -159,9 +241,9 @@ class MetricsRecord:
     simulation_duration: float = 0.0
     fps: float = 0.0
     acquisition_time: float = 0.0
-    avg_tracking_error: float = 0.0
-    max_tracking_error: float = 0.0
-    rmse_tracking_error: float = 0.0
+    avg_tracking_error: Union[float, str] = 0.0
+    max_tracking_error: Union[float, str] = 0.0
+    rmse_tracking_error: Union[float, str] = 0.0
     lock_retention_rate: float = 0.0
     per_frame_processing_time_ms: float = 0.0
     total_frames: int = 0
@@ -173,6 +255,7 @@ class MetricsRecord:
     scenario_name: str = ""
     is_held_out: bool = False
     pipeline_errors: int = 0
+    has_ground_truth: bool = True
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize metrics to dictionary for easy JSON/CSV export or GUI consumption."""
