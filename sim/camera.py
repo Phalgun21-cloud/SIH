@@ -63,6 +63,8 @@ class Camera:
         bg_noise_std: float = 2.0,
         enable_auto_exposure: bool = False,
         aec_target_peak: float = 200.0,
+        target_shape: str = "gaussian",  # "gaussian", "square", "circle" (PS default: square/circle 10x10, range 5-20 px)
+        target_size_px: float = 10.0,    # Target beacon spot size in pixels (PS default: 10, range: 5 to 20)
     ):
         self.state = CameraState(
             pan=float(pan),
@@ -76,6 +78,8 @@ class Camera:
         self.bg_noise_std = float(bg_noise_std)
         self.enable_auto_exposure = bool(enable_auto_exposure)
         self.aec = AutoExposureController(target_peak=aec_target_peak) if enable_auto_exposure else None
+        self.target_shape = str(target_shape)
+        self.target_size_px = float(target_size_px)
         self._rng = np.random.default_rng(seed=42)
 
     @property
@@ -120,22 +124,63 @@ class Camera:
         error_tilt = (v - cy) * (self.state.fov_y / h)
         return (error_pan, error_tilt)
 
-    def _render_spot(self, image: np.ndarray, u_t: float, v_t: float, intensity: float) -> None:
-        """Render a Gaussian PSF spot centered at (u_t, v_t) onto the image."""
+    def _render_spot(
+        self,
+        image: np.ndarray,
+        u_t: float,
+        v_t: float,
+        intensity: float,
+        shape: Optional[str] = None,
+        size_px: Optional[float] = None,
+    ) -> None:
+        """
+        Render an optical beacon or clutter spot centered at (u_t, v_t) onto the image.
+        Supports Gaussian PSF, square, or circular spots (PS default: 10x10, range 5-20 px).
+        """
         w, h = self.state.resolution
-        radius = int(np.ceil(4 * self.psf_sigma))
-        u_min = max(0, int(np.floor(u_t - radius)))
-        u_max = min(w, int(np.ceil(u_t + radius + 1)))
-        v_min = max(0, int(np.floor(v_t - radius)))
-        v_max = min(h, int(np.ceil(v_t + radius + 1)))
+        spot_shape = (shape or self.target_shape).lower()
+        spot_size = float(size_px if size_px is not None else self.target_size_px)
+        spot_size = float(np.clip(spot_size, 5.0, 20.0))
 
-        grid_x, grid_y = np.meshgrid(
-            np.arange(u_min, u_max),
-            np.arange(v_min, v_max),
-        )
-        dist_sq = (grid_x - u_t) ** 2 + (grid_y - v_t) ** 2
-        blob = intensity * np.exp(-dist_sq / (2.0 * self.psf_sigma ** 2))
-        image[v_min:v_max, u_min:u_max] += blob
+        if spot_shape == "square":
+            half_s = spot_size / 2.0
+            r_int = int(np.ceil(half_s + 2))
+            u_min = max(0, int(np.floor(u_t - r_int)))
+            u_max = min(w, int(np.ceil(u_t + r_int + 1)))
+            v_min = max(0, int(np.floor(v_t - r_int)))
+            v_max = min(h, int(np.ceil(v_t + r_int + 1)))
+            if u_max > u_min and v_max > v_min:
+                grid_x, grid_y = np.meshgrid(np.arange(u_min, u_max), np.arange(v_min, v_max))
+                dx = np.abs(grid_x - u_t)
+                dy = np.abs(grid_y - v_t)
+                dist = np.maximum(dx, dy)
+                profile = np.exp(-0.5 * (np.maximum(0.0, dist - half_s * 0.4) / (spot_size * 0.25)) ** 2) * intensity
+                image[v_min:v_max, u_min:u_max] += profile
+        elif spot_shape == "circle":
+            sigma = spot_size / 4.0
+            radius = int(np.ceil(4 * sigma))
+            u_min = max(0, int(np.floor(u_t - radius)))
+            u_max = min(w, int(np.ceil(u_t + radius + 1)))
+            v_min = max(0, int(np.floor(v_t - radius)))
+            v_max = min(h, int(np.ceil(v_t + radius + 1)))
+            if u_max > u_min and v_max > v_min:
+                grid_x, grid_y = np.meshgrid(np.arange(u_min, u_max), np.arange(v_min, v_max))
+                dist_sq = (grid_x - u_t) ** 2 + (grid_y - v_t) ** 2
+                profile = intensity * np.exp(-dist_sq / (2.0 * sigma ** 2))
+                image[v_min:v_max, u_min:u_max] += profile
+        else:
+            # Gaussian PSF: equivalent radius based on spot_size (sigma = spot_size / 4.0)
+            sigma = (spot_size / 4.0) if spot_size > 0 else self.psf_sigma
+            radius = int(np.ceil(4 * sigma))
+            u_min = max(0, int(np.floor(u_t - radius)))
+            u_max = min(w, int(np.ceil(u_t + radius + 1)))
+            v_min = max(0, int(np.floor(v_t - radius)))
+            v_max = min(h, int(np.ceil(v_t + radius + 1)))
+            if u_max > u_min and v_max > v_min:
+                grid_x, grid_y = np.meshgrid(np.arange(u_min, u_max), np.arange(v_min, v_max))
+                dist_sq = (grid_x - u_t) ** 2 + (grid_y - v_t) ** 2
+                blob = intensity * np.exp(-dist_sq / (2.0 * (sigma ** 2)))
+                image[v_min:v_max, u_min:u_max] += blob
 
     def render_frame(
         self,

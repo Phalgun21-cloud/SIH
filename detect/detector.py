@@ -453,7 +453,7 @@ class AdaptiveOpticalDetector:
         self,
         tophat_kernel_size: int = 7,
         min_blob_area: int = 3,
-        max_blob_area: int = 250,
+        max_blob_area: int = 450,  # Accommodate target sizes up to 20x20 px (400 px^2) per PS spec
         enable_signature_verification: bool = True,
         known_signatures: Optional[Dict[Union[str, int], float]] = None,
         targets: Optional[List[Any]] = None,

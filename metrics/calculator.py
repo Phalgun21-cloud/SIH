@@ -191,7 +191,10 @@ class MetricsCalculator:
 
             # Acquisition detection: first frame where active lock is achieved
             if acquisition_frame is None and is_active_mode:
-                if rec.get("detected", True) or (err is not None and err <= self.lock_error_threshold_mrad):
+                if err is not None:
+                    if err <= self.lock_error_threshold_mrad:
+                        acquisition_frame = idx
+                elif rec.get("locked", False) or rec.get("is_locked", False):
                     acquisition_frame = idx
 
         total_tracked = max(1, total_frames)
@@ -231,6 +234,16 @@ class MetricsCalculator:
             rmse_px = float(np.sqrt(np.mean(err_arr_px**2)))
             tracking_error_px = avg_tracking_error_px
             lock_retention_rate = float(active_locked_frames / total_tracked)
+
+            # Compute steady-state tracking metrics (post-acquisition locked portion)
+            start_steady = acquisition_frame if (acquisition_frame is not None and acquisition_frame < len(err_arr_px)) else 0
+            steady_err_arr_px = err_arr_px[start_steady:] if len(err_arr_px) > start_steady else err_arr_px
+            steady_tracking_error_px = float(np.mean(steady_err_arr_px)) if len(steady_err_arr_px) > 0 else avg_tracking_error_px
+            steady_rmse_px = float(np.sqrt(np.mean(steady_err_arr_px**2))) if len(steady_err_arr_px) > 0 else rmse_px
+
+            steady_err_arr_mrad = err_arr_mrad[start_steady:] if len(err_arr_mrad) > start_steady else err_arr_mrad
+            steady_avg_tracking_error_mrad = float(np.mean(steady_err_arr_mrad)) if len(steady_err_arr_mrad) > 0 else avg_tracking_error
+            steady_rmse_tracking_error_mrad = float(np.sqrt(np.mean(steady_err_arr_mrad**2))) if len(steady_err_arr_mrad) > 0 else rmse_tracking_error
         else:
             avg_tracking_error = "N/A - no ground truth available"
             max_tracking_error = "N/A - no ground truth available"
@@ -239,6 +252,10 @@ class MetricsCalculator:
             max_tracking_error_px = "N/A - no ground truth available"
             rmse_px = "N/A - no ground truth available"
             tracking_error_px = "N/A - no ground truth available"
+            steady_tracking_error_px = "N/A - no ground truth available"
+            steady_rmse_px = "N/A - no ground truth available"
+            steady_avg_tracking_error_mrad = "N/A - no ground truth available"
+            steady_rmse_tracking_error_mrad = "N/A - no ground truth available"
 
             # Without ground truth, compute lock retention as fraction of frames with a valid detection
             valid_det_count = sum(1 for r in frame_records if r.get("detected", False))
@@ -302,4 +319,8 @@ class MetricsCalculator:
             acquisition_time_s=acquisition_time_s,
             reacquisition_time_s=reacquisition_time_s,
             centroiding_error_log_px=centroiding_error_log_px,
+            steady_tracking_error_px=steady_tracking_error_px,
+            steady_rmse_px=steady_rmse_px,
+            steady_avg_tracking_error_mrad=steady_avg_tracking_error_mrad,
+            steady_rmse_tracking_error_mrad=steady_rmse_tracking_error_mrad,
         )

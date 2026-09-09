@@ -402,6 +402,11 @@ class MetricsRecord:
     reacquisition_time_s: float = 0.0
     centroiding_error_log_px: List[float] = field(default_factory=list)
 
+    steady_tracking_error_px: Union[float, str] = 0.0
+    steady_rmse_px: Union[float, str] = 0.0
+    steady_avg_tracking_error_mrad: Union[float, str] = 0.0
+    steady_rmse_tracking_error_mrad: Union[float, str] = 0.0
+
     def to_dict(self) -> Dict[str, Any]:
         """Serialize metrics to dictionary for easy JSON/CSV export or GUI consumption."""
         d = asdict(self)
@@ -409,6 +414,10 @@ class MetricsRecord:
         d["tracking_error_px_avg"] = self.avg_tracking_error_px or self.tracking_error_px
         d["tracking_error_px_max"] = self.max_tracking_error_px
         d["rmse_px"] = self.rmse_px
+        d["steady_tracking_error_px"] = self.steady_tracking_error_px
+        d["steady_rmse_px"] = self.steady_rmse_px
+        d["steady_avg_tracking_error_mrad"] = self.steady_avg_tracking_error_mrad
+        d["steady_rmse_tracking_error_mrad"] = self.steady_rmse_tracking_error_mrad
         d["target_loss_percent"] = self.target_loss_percent
         d["acquisition_time_s"] = self.acquisition_time_s if self.acquisition_time_s > 0 else self.acquisition_time
         d["reacquisition_time_s"] = self.reacquisition_time_s
@@ -417,9 +426,12 @@ class MetricsRecord:
         # Human-readable exact PS Terminology mapping (for evaluation rubric / QA)
         d["ps_terminology"] = {
             "Tracking Error": self.tracking_error_px or self.avg_tracking_error_px,
+            "Tracking Error (Steady-State)": self.steady_tracking_error_px or self.tracking_error_px,
             "Target Loss": self.target_loss_percent,
             "Centroiding error": self.centroiding_error_px or self.avg_centroiding_error_px,
             "RMSE": self.rmse_px,
+            "RMSE (Steady-State)": self.steady_rmse_px or self.rmse_px,
+            "Acquisition Time": self.acquisition_time_s if self.acquisition_time_s > 0 else self.acquisition_time,
             "Re-acquisition time": self.reacquisition_time_s,
             "Lock retention rate": self.lock_retention_rate,
             "FPS": self.fps,

@@ -8,7 +8,7 @@ Enforces physical gimbal actuator dynamics:
 Prevents instantaneous or unphysical gimbal jumps even if commanded by the controller.
 """
 
-from typing import Tuple
+from typing import Tuple, Optional
 import numpy as np
 
 
@@ -22,13 +22,32 @@ class SlewRateLimiter:
         self,
         max_velocity: float = 0.5,      # Maximum angular rate in rad/s (default 500 mrad/s)
         max_acceleration: float = 1.0,  # Maximum angular acceleration in rad/s^2 (default 1000 mrad/s^2)
+        max_velocity_deg_s: Optional[float] = None,     # PS default: 5 to 10 deg/s
+        max_acceleration_deg_s2: Optional[float] = None,
     ):
-        self.max_velocity = float(max_velocity)
-        self.max_acceleration = float(max_acceleration)
+        if max_velocity_deg_s is not None:
+            self.max_velocity = float(np.deg2rad(max_velocity_deg_s))
+        else:
+            self.max_velocity = float(max_velocity)
+
+        if max_acceleration_deg_s2 is not None:
+            self.max_acceleration = float(np.deg2rad(max_acceleration_deg_s2))
+        else:
+            self.max_acceleration = float(max_acceleration)
 
         # Internal state: current angular velocities (rad/s)
         self.current_pan_rate = 0.0
         self.current_tilt_rate = 0.0
+
+    @property
+    def max_velocity_deg_s(self) -> float:
+        """Maximum angular velocity in degrees per second."""
+        return float(np.rad2deg(self.max_velocity))
+
+    @property
+    def max_acceleration_deg_s2(self) -> float:
+        """Maximum angular acceleration in degrees per second squared."""
+        return float(np.rad2deg(self.max_acceleration))
 
     def reset(self) -> None:
         """Reset internal rate states to zero."""
