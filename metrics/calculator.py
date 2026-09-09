@@ -3,30 +3,81 @@ Quantitative Metric Calculator for FSOC Coarse PAT Simulator.
 Smart India Hackathon - Problem Statement 26169 (ISRO / DOS)
 
 Computes simulation duration, FPS, acquisition time, tracking error statistics
-(Mean, Max, RMSE), lock retention rates (strictly separating active lock from coasting),
-per-frame processing latencies, and stage-by-stage profiling breakdowns.
+(Mean, Max, RMSE in both mrad and pixel-space), lock retention rates,
+PS-exact target loss percentage, centroiding error logs, per-frame processing
+latencies, and stage-by-stage profiling breakdowns.
 """
 
 from __future__ import annotations
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple, Union
 import numpy as np
 from contracts import MetricsRecord
 from metrics.logger import MetricsLogger
 
 
+def angular_to_pixel_error(
+    angular_error: float,
+    fov_deg: Optional[float] = None,
+    fov_rad: Optional[float] = None,
+    resolution_px: int = 640,
+    angular_is_mrad: bool = True,
+) -> float:
+    """
+    Convert angular tracking error to focal plane pixel tracking error.
+
+    Formula (per SIH Problem Statement specification):
+        pixel_error = angular_error_rad * (resolution_px / fov_rad)
+
+    Args:
+        angular_error: Angular error magnitude (mrad if angular_is_mrad=True, else radians).
+        fov_deg: Camera horizontal field of view in degrees (e.g. 2.29183 deg).
+        fov_rad: Camera horizontal field of view in radians (e.g. 0.040 rad).
+        resolution_px: Sensor resolution along the corresponding axis in pixels (default 640).
+        angular_is_mrad: True if angular_error is in milliradians, False if in radians.
+
+    Returns:
+        Tracking error in pixels.
+    """
+    if fov_rad is None:
+        if fov_deg is not None:
+            fov_rad = float(np.deg2rad(fov_deg))
+        else:
+            fov_rad = 0.040  # Default 40 mrad
+
+    if fov_rad <= 0:
+        return 0.0
+
+    angular_error_rad = float(angular_error) * 1e-3 if angular_is_mrad else float(angular_error)
+    return float(angular_error_rad * (resolution_px / fov_rad))
+
+
 class MetricsCalculator:
     """
-    Computes rigorous cumulative and summary performance metrics for a simulation run.
+    Computes rigorous cumulative and summary performance metrics for a simulation run
+    in both angular (mrad) and pixel-space (px) coordinates.
     """
 
-    def __init__(self, dt: float = 0.033, lock_error_threshold_mrad: float = 2.0):
+    def __init__(
+        self,
+        dt: float = 0.033,
+        lock_error_threshold_mrad: float = 2.0,
+        fov_deg: Optional[float] = None,
+        fov_rad: float = 0.040,
+        resolution_px: int = 640,
+    ):
         """
         Args:
             dt: Simulation timestep in seconds (default 0.033s ~ 30 Hz).
             lock_error_threshold_mrad: Radial error threshold (mrad) within which target is considered locked.
+            fov_deg: Optional camera horizontal FOV in degrees.
+            fov_rad: Camera horizontal FOV in radians (default 0.040 rad).
+            resolution_px: Camera focal plane resolution (default 640 pixels).
         """
         self.dt = dt
         self.lock_error_threshold_mrad = lock_error_threshold_mrad
+        self.fov_deg = fov_deg
+        self.fov_rad = float(np.deg2rad(fov_deg)) if fov_deg is not None else float(fov_rad)
+        self.resolution_px = int(resolution_px)
 
     def compute_from_logger(
         self,
@@ -40,19 +91,6 @@ class MetricsCalculator:
     ) -> MetricsRecord:
         """
         Compute a complete MetricsRecord from a MetricsLogger instance and wall-clock times.
-
-        Args:
-            logger: MetricsLogger holding frame records and track loss events.
-            start_wall_time: perf_counter start timestamp.
-            end_wall_time: perf_counter end timestamp.
-            scenario_name: Identifier name of scenario.
-            is_held_out: Flag indicating whether scenario is a held-out test case.
-            stage_timings: Dictionary of stage execution times list in milliseconds.
-                           e.g. {'detection_ms': [...], 'tracking_ms': [...], 'control_ms': [...]}
-            pipeline_errors: Number of caught pipeline exceptions during run.
-
-        Returns:
-            MetricsRecord populated with all verified statistics.
         """
         return self.compute_metrics(
             frame_records=logger.frame_records,
@@ -78,6 +116,8 @@ class MetricsCalculator:
     ) -> MetricsRecord:
         """
         Compute MetricsRecord from frame records list and profiler timestamps.
+        Calculates both mrad and pixel-space tracking metrics, exact PS target loss percentage,
+        and centroiding error logs.
         """
         total_frames = len(frame_records)
         wall_time_s = max(1e-9, end_wall_time - start_wall_time)
@@ -89,7 +129,9 @@ class MetricsCalculator:
         mode_counts = {"KF": 0, "PF": 0, "COAST": 0, "PF_COAST": 0}
         active_locked_frames = 0
         coasting_frames = 0
-        tracking_errors = []
+        tracking_errors_mrad = []
+        tracking_errors_px = []
+        centroiding_errors_px = []
         acquisition_frame: Optional[int] = None
 
         for idx, rec in enumerate(frame_records):
@@ -123,15 +165,31 @@ class MetricsCalculator:
                     active_locked_frames += 1
                     is_active_mode = True
 
-            # Extract tracking error
+            # Extract tracking error (mrad and pixel space)
             err = rec.get("radial_error_mrad")
             if err is None:
                 err = rec.get("tracking_error")
             if err is not None:
-                tracking_errors.append(float(err))
+                err_val = float(err)
+                tracking_errors_mrad.append(err_val)
+
+                # Compute pixel-space tracking error
+                px_err = rec.get("tracking_error_px")
+                if px_err is None:
+                    px_err = angular_to_pixel_error(
+                        angular_error=err_val,
+                        fov_rad=self.fov_rad,
+                        resolution_px=self.resolution_px,
+                        angular_is_mrad=True,
+                    )
+                tracking_errors_px.append(float(px_err))
+
+            # Centroiding error per frame (for Benchmark Performance-1 log requirement)
+            cent_err = rec.get("centroiding_error_px")
+            if cent_err is not None:
+                centroiding_errors_px.append(float(cent_err))
 
             # Acquisition detection: first frame where active lock is achieved
-            # (active estimator mode and either valid detection or within error threshold)
             if acquisition_frame is None and is_active_mode:
                 if rec.get("detected", True) or (err is not None and err <= self.lock_error_threshold_mrad):
                     acquisition_frame = idx
@@ -139,26 +197,71 @@ class MetricsCalculator:
         total_tracked = max(1, total_frames)
         active_tracker_breakdown = {k: float(v / total_tracked) for k, v in mode_counts.items()}
 
-        has_ground_truth = (len(tracking_errors) > 0)
+        # Exact PS Item 18 Target Loss phrasing: (frames with no valid lock / total frames) * 100
+        unlocked_frames = total_frames - active_locked_frames
+        target_loss_percent = float((unlocked_frames / total_tracked) * 100.0) if total_frames > 0 else 0.0
+
+        # Calculate Re-acquisition time (s) across loss intervals
+        reacq_durations = []
+        loss_epoch_start: Optional[float] = None
+        for idx, rec in enumerate(frame_records):
+            m = rec.get("tracker_mode", "UNKNOWN")
+            is_lk = (m in ["KF", "PF"] or "KF" in m or "PF" in m) and "COAST" not in m
+            t_now = float(rec.get("timestamp", idx * self.dt))
+            if not is_lk:
+                if loss_epoch_start is None and idx > (acquisition_frame or 0):
+                    loss_epoch_start = t_now
+            else:
+                if loss_epoch_start is not None:
+                    reacq_durations.append(max(0.0, t_now - loss_epoch_start))
+                    loss_epoch_start = None
+        reacquisition_time_s = float(np.mean(reacq_durations)) if reacq_durations else 0.0
+
+        has_ground_truth = (len(tracking_errors_mrad) > 0)
 
         if has_ground_truth:
-            err_arr = np.array(tracking_errors, dtype=np.float64)
-            avg_tracking_error = float(np.mean(err_arr))
-            max_tracking_error = float(np.max(err_arr))
-            rmse_tracking_error = float(np.sqrt(np.mean(err_arr**2)))
+            err_arr_mrad = np.array(tracking_errors_mrad, dtype=np.float64)
+            avg_tracking_error = float(np.mean(err_arr_mrad))
+            max_tracking_error = float(np.max(err_arr_mrad))
+            rmse_tracking_error = float(np.sqrt(np.mean(err_arr_mrad**2)))
+
+            err_arr_px = np.array(tracking_errors_px, dtype=np.float64)
+            avg_tracking_error_px = float(np.mean(err_arr_px))
+            max_tracking_error_px = float(np.max(err_arr_px))
+            rmse_px = float(np.sqrt(np.mean(err_arr_px**2)))
+            tracking_error_px = avg_tracking_error_px
             lock_retention_rate = float(active_locked_frames / total_tracked)
         else:
             avg_tracking_error = "N/A - no ground truth available"
             max_tracking_error = "N/A - no ground truth available"
             rmse_tracking_error = "N/A - no ground truth available"
+            avg_tracking_error_px = "N/A - no ground truth available"
+            max_tracking_error_px = "N/A - no ground truth available"
+            rmse_px = "N/A - no ground truth available"
+            tracking_error_px = "N/A - no ground truth available"
+
             # Without ground truth, compute lock retention as fraction of frames with a valid detection
             valid_det_count = sum(1 for r in frame_records if r.get("detected", False))
             lock_retention_rate = float(valid_det_count / total_tracked)
+            target_loss_percent = float((1.0 - lock_retention_rate) * 100.0)
+
+        if centroiding_errors_px:
+            c_arr = np.array(centroiding_errors_px, dtype=np.float64)
+            avg_centroiding_error_px = float(np.mean(c_arr))
+            max_centroiding_error_px = float(np.max(c_arr))
+            centroiding_error_px = avg_centroiding_error_px
+            centroiding_error_log_px = [float(c) for c in centroiding_errors_px]
+        else:
+            avg_centroiding_error_px = "N/A - no centroiding log"
+            max_centroiding_error_px = "N/A - no centroiding log"
+            centroiding_error_px = "N/A - no centroiding log"
+            centroiding_error_log_px = []
 
         if acquisition_frame is not None:
             acquisition_time = float(acquisition_frame * self.dt)
         else:
             acquisition_time = simulation_duration  # Never acquired
+        acquisition_time_s = acquisition_time
 
         # Process stage timings
         stage_breakdown = {}
@@ -188,4 +291,15 @@ class MetricsCalculator:
             is_held_out=is_held_out,
             pipeline_errors=pipeline_errors,
             has_ground_truth=has_ground_truth,
+            tracking_error_px=tracking_error_px,
+            avg_tracking_error_px=avg_tracking_error_px,
+            max_tracking_error_px=max_tracking_error_px,
+            rmse_px=rmse_px,
+            centroiding_error_px=centroiding_error_px,
+            avg_centroiding_error_px=avg_centroiding_error_px,
+            max_centroiding_error_px=max_centroiding_error_px,
+            target_loss_percent=target_loss_percent,
+            acquisition_time_s=acquisition_time_s,
+            reacquisition_time_s=reacquisition_time_s,
+            centroiding_error_log_px=centroiding_error_log_px,
         )

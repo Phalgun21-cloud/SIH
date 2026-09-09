@@ -17,6 +17,7 @@ from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
 
 from contracts import MetricsRecord, TargetState, normalize_scenario_targets
+from resources import get_resource_path
 from sim.target import Target
 from sim.camera import Camera
 from sim.environment import Environment
@@ -69,9 +70,11 @@ class BatchScenarioRunner:
 
     def load_scenarios(self) -> List[Dict[str, Any]]:
         """Load scenario specifications from JSON config file."""
-        if not os.path.exists(self.config_path):
+        resolved = get_resource_path(self.config_path)
+        actual_path = resolved if os.path.exists(resolved) else self.config_path
+        if not os.path.exists(actual_path):
             raise FileNotFoundError(f"Scenario configuration file not found at: {self.config_path}")
-        with open(self.config_path, "r", encoding="utf-8") as f:
+        with open(actual_path, "r", encoding="utf-8") as f:
             return json.load(f)
 
     def run_scenario(self, scenario_cfg: Dict[str, Any], use_hybrid_tracker: Optional[bool] = None) -> MetricsRecord:
@@ -132,7 +135,17 @@ class BatchScenarioRunner:
 
         turb = KolmogorovTurbulence(cn2=cn2, seed=seed) if cn2 > 0 else None
         vib = PlatformVibration(amplitude_rad=vib_amp, frequency_hz=vib_freq, random_walk_std=vib_amp * 0.1, seed=seed) if vib_amp > 0 else None
-        noise = SensorNoise(gaussian_std=noise_std, seed=seed) if noise_std > 0 else None
+        noise_types = dist_cfg.get("noise_types", None)
+        poisson_scale = float(dist_cfg.get("poisson_scale", 1.0))
+        sp_prob = float(dist_cfg.get("salt_pepper_prob", 0.0005 if (noise_types and "salt_pepper" in str(noise_types)) else 0.0))
+        has_noise = (noise_types is not None and len(noise_types) > 0) or noise_std > 0
+        noise = SensorNoise(
+            gaussian_std=noise_std,
+            salt_pepper_prob=sp_prob,
+            poisson_scale=poisson_scale,
+            noise_types=noise_types,
+            seed=seed,
+        ) if has_noise else None
 
         # Check frame source mode
         frame_source = scenario_cfg.get("frame_source", "synthetic")
@@ -166,6 +179,9 @@ class BatchScenarioRunner:
                 end_f = int(occ_item.get("end_frame", 25))
                 scheduled_occluders.append((start_f, end_f, occ_obj))
 
+        # Platform base motion profile (optional)
+        plat_motion_cfg = scenario_cfg.get("platform_motion", dist_cfg.get("platform_motion", None))
+
         env = Environment(
             target=target,
             targets=targets,
@@ -177,6 +193,7 @@ class BatchScenarioRunner:
             occluders=[],
             frame_source=frame_source,
             video_source=video_source,
+            platform_motion=plat_motion_cfg,
         )
 
         # Core pipeline components
@@ -365,6 +382,16 @@ class BatchScenarioRunner:
             try:
                 _, _, rad_err_rad = env.get_angular_tracking_error()
                 rad_err_mrad = (rad_err_rad * 1e3) if rad_err_rad is not None else None
+
+                # Pixel-space tracking error and centroiding error calculation
+                rad_err_px = None
+                if rad_err_rad is not None:
+                    rad_err_px = float(rad_err_rad * (camera.state.resolution[0] / camera.state.fov_x))
+
+                cent_err_px = None
+                if det is not None and frame.ground_truth_target_pos is not None:
+                    cent_err_px = float(np.hypot(det.x - frame.ground_truth_target_pos[0], det.y - frame.ground_truth_target_pos[1]))
+
                 logger.log_frame({
                     "frame_id": f,
                     "timestamp": frame.timestamp,
@@ -373,6 +400,8 @@ class BatchScenarioRunner:
                     "detected": is_valid_det,
                     "confidence": det.confidence if det is not None else 0.0,
                     "radial_error_mrad": rad_err_mrad,
+                    "tracking_error_px": rad_err_px,
+                    "centroiding_error_px": cent_err_px,
                     "cam_pan_mrad": cam_state.pan * 1e3 if cam_state is not None else 0.0,
                     "cam_tilt_mrad": cam_state.tilt * 1e3 if cam_state is not None else 0.0,
                     "tgt_pan_mrad": (tgt_state.x * 1e3) if tgt_state is not None else None,
@@ -386,6 +415,8 @@ class BatchScenarioRunner:
         wall_end = time.perf_counter()
 
         self.last_logger = logger
+        self.calculator.fov_rad = camera.state.fov_x
+        self.calculator.resolution_px = camera.state.resolution[0]
         record = self.calculator.compute_from_logger(
             logger=logger,
             start_wall_time=wall_start,
@@ -395,6 +426,7 @@ class BatchScenarioRunner:
             stage_timings=stage_timings,
             pipeline_errors=pipeline_errors,
         )
+
         return record
 
     def run_all(self, scenarios: Optional[List[Dict[str, Any]]] = None) -> List[MetricsRecord]:
@@ -437,9 +469,16 @@ class BatchScenarioRunner:
             "fps",
             "per_frame_processing_time_ms",
             "acquisition_time",
+            "acquisition_time_s",
+            "reacquisition_time_s",
             "avg_tracking_error",
             "max_tracking_error",
             "rmse_tracking_error",
+            "tracking_error_px",
+            "max_tracking_error_px",
+            "rmse_px",
+            "centroiding_error_px",
+            "target_loss_percent",
             "lock_retention_rate",
             "active_locked_frames",
             "coasting_frames",

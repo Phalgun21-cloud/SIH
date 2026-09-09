@@ -225,6 +225,32 @@ class TestVideoPipelineIntegration(unittest.TestCase):
         self.assertEqual(d["avg_tracking_error"], "N/A - no ground truth available")
         self.assertFalse(d["has_ground_truth"])
 
+    def test_real_video_generalization_and_stress(self):
+        """
+        Verify detector and tracker generalization against real-world camera footage
+        and adversarial non-circular compressed video content.
+        """
+        real_video_path = "data/videos/real_laser_pointer.mp4"
+        if not os.path.exists(real_video_path):
+            self.skipTest(f"Real video test file not found at {real_video_path}")
+
+        runner = BatchScenarioRunner(use_hybrid_tracker=False)
+        cfg = {
+            "scenario_name": "BENCHMARK_2_REAL_LASER",
+            "frame_source": "video_file",
+            "video_path": real_video_path,
+            "num_frames": 30,
+        }
+        record = runner.run_scenario(cfg)
+        self.assertEqual(record.pipeline_errors, 0)
+        self.assertEqual(record.avg_tracking_error, "N/A - no ground truth available")
+        # In real laser pointer footage, detector should maintain high lock retention (>90%)
+        self.assertGreaterEqual(record.lock_retention_rate, 0.90)
+
+        # Inspect detector confidences on real footage
+        confs = [f.get("confidence", 0.0) for f in runner.last_logger.frame_records]
+        self.assertGreater(np.mean(confs), 0.75, "Real laser pointer spot should achieve mean confidence > 0.75")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -9,6 +9,7 @@ from typing import Optional, Iterator, Tuple
 import cv2
 import numpy as np
 from contracts import FrameData
+from resources import get_resource_path
 
 
 class VideoFrameSource:
@@ -27,7 +28,8 @@ class VideoFrameSource:
             video_path: Filepath to the video file.
             loop: Whether to loop back to the start upon reaching end of stream.
         """
-        self.video_path = str(video_path)
+        resolved = get_resource_path(str(video_path))
+        self.video_path = resolved if os.path.exists(resolved) else str(video_path)
         self.loop = bool(loop)
 
         if not os.path.exists(self.video_path):

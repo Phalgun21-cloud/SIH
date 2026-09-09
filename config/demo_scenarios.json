@@ -201,5 +201,158 @@
       "enable_predictive_search": true,
       "tier1_budget_frames": 25
     }
+  },
+  {
+    "scenario_name": "DEMO_CIRCULAR_MOTION_POISSON_NOISE",
+    "category": "live_demo",
+    "seed": 606,
+    "description": "Circular parametric orbit tracking with stacked Poisson shot noise and Gaussian readout noise.",
+    "num_frames": 100,
+    "dt": 0.033,
+    "target": {
+      "initial_pos": [0.008, 0.0],
+      "motion_type": "circular",
+      "radius": 0.008,
+      "angular_velocity": 0.8,
+      "center": [0.0, 0.0],
+      "base_intensity": 230.0,
+      "distance_km": 5.0
+    },
+    "disturbances": {
+      "cn2": 1.0e-15,
+      "vibration_amplitude": 0.0002,
+      "vibration_frequency": 12.0,
+      "noise_types": ["poisson", "gaussian"],
+      "noise_level": 3.0,
+      "poisson_scale": 1.0,
+      "occlusion": null
+    },
+    "control": {
+      "kp": 0.40,
+      "ki": 0.0,
+      "kd": 0.18,
+      "k_ff": 1.0,
+      "latency_frames": 2,
+      "max_velocity": 0.5,
+      "max_acceleration": 1.0
+    },
+    "reacquisition": {
+      "enable_predictive_search": true,
+      "tier1_budget_frames": 25
+    }
+  },
+  {
+    "scenario_name": "DEMO_FIGURE_EIGHT_PLATFORM_MOTION",
+    "category": "live_demo",
+    "seed": 707,
+    "description": "Lissajous figure-8 target trajectory with active sinusoidal platform motion compensation.",
+    "num_frames": 100,
+    "dt": 0.033,
+    "target": {
+      "initial_pos": [0.0, 0.0],
+      "motion_type": "figure_eight",
+      "amplitude_x": 0.010,
+      "amplitude_y": 0.005,
+      "frequency": 0.25,
+      "center": [0.0, 0.0],
+      "base_intensity": 230.0,
+      "distance_km": 5.0
+    },
+    "platform_motion": {
+      "motion_type": "sinusoidal",
+      "amplitude": 0.0015,
+      "frequency": 0.5,
+      "axis": "x"
+    },
+    "disturbances": {
+      "cn2": 1.0e-15,
+      "vibration_amplitude": 0.0002,
+      "vibration_frequency": 10.0,
+      "noise_level": 3.0,
+      "occlusion": null
+    },
+    "control": {
+      "kp": 0.45,
+      "ki": 0.01,
+      "kd": 0.20,
+      "k_ff": 1.0,
+      "latency_frames": 2,
+      "max_velocity": 0.5,
+      "max_acceleration": 1.0
+    },
+    "reacquisition": {
+      "enable_predictive_search": true,
+      "tier1_budget_frames": 25
+    }
+  },
+  {
+    "scenario_name": "DEMO_ATMOSPHERIC_FOG",
+    "category": "live_demo",
+    "seed": 808,
+    "description": "Dense atmospheric fog scattering with contrast reduction, veiling airlight, and spatial diffusion.",
+    "num_frames": 100,
+    "dt": 0.033,
+    "target": {
+      "initial_pos": [0.007, 0.003],
+      "velocity": [0.0015, 0.001],
+      "base_intensity": 235.0,
+      "distance_km": 5.0
+    },
+    "disturbances": {
+      "cn2": 1.0e-15,
+      "vibration_amplitude": 0.0001,
+      "vibration_frequency": 10.0,
+      "atmospheric_condition": "fog",
+      "noise_level": 2.0,
+      "occlusion": null
+    },
+    "control": {
+      "kp": 0.40,
+      "ki": 0.005,
+      "kd": 0.18,
+      "k_ff": 1.0,
+      "latency_frames": 2,
+      "max_velocity": 0.5,
+      "max_acceleration": 1.0
+    },
+    "reacquisition": {
+      "enable_predictive_search": true,
+      "tier1_budget_frames": 25
+    }
+  },
+  {
+    "scenario_name": "DEMO_ATMOSPHERIC_LOW_LIGHT",
+    "category": "live_demo",
+    "seed": 909,
+    "description": "Nocturnal low-light optical regime with 72% exposure reduction and sensor noise floor.",
+    "num_frames": 100,
+    "dt": 0.033,
+    "target": {
+      "initial_pos": [0.005, -0.003],
+      "velocity": [0.001, 0.0015],
+      "base_intensity": 235.0,
+      "distance_km": 5.0
+    },
+    "disturbances": {
+      "cn2": 1.0e-15,
+      "vibration_amplitude": 0.0001,
+      "vibration_frequency": 10.0,
+      "atmospheric_condition": "low_light",
+      "noise_level": 2.0,
+      "occlusion": null
+    },
+    "control": {
+      "kp": 0.40,
+      "ki": 0.005,
+      "kd": 0.18,
+      "k_ff": 1.0,
+      "latency_frames": 2,
+      "max_velocity": 0.5,
+      "max_acceleration": 1.0
+    },
+    "reacquisition": {
+      "enable_predictive_search": true,
+      "tier1_budget_frames": 25
+    }
   }
 ]

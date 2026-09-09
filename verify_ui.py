@@ -27,6 +27,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from contracts import FrameData, TargetState, CameraState, MetricsRecord, normalize_scenario_targets
+from resources import get_resource_path
 from sim.target import Target
 from sim.camera import Camera
 from sim.environment import Environment
@@ -73,6 +74,9 @@ class SimulationSession:
         self.vib_amp = float(dist_cfg.get("vibration_amplitude", 0.0003))
         self.vib_freq = float(dist_cfg.get("vibration_frequency", 10.0))
         self.noise_std = float(dist_cfg.get("noise_level", 4.0))
+        self.noise_types = dist_cfg.get("noise_types", None)
+        self.poisson_scale = float(dist_cfg.get("poisson_scale", 1.0))
+        self.salt_pepper_prob = float(dist_cfg.get("salt_pepper_prob", 0.0005 if (self.noise_types and "salt_pepper" in str(self.noise_types)) else 0.0))
 
         # Occlusions (single or list)
         self.scheduled_occluders: List[Tuple[int, int, DynamicOccluder]] = []
@@ -130,7 +134,14 @@ class SimulationSession:
 
         turb = KolmogorovTurbulence(cn2=self.cn2, seed=self.seed) if self.cn2 > 0 else None
         vib = PlatformVibration(amplitude_rad=self.vib_amp, frequency_hz=self.vib_freq, seed=self.seed) if self.vib_amp > 0 else None
-        noise = SensorNoise(gaussian_std=self.noise_std, seed=self.seed) if self.noise_std > 0 else None
+        has_noise = (self.noise_types is not None and len(self.noise_types) > 0) or self.noise_std > 0
+        noise = SensorNoise(
+            gaussian_std=self.noise_std,
+            salt_pepper_prob=self.salt_pepper_prob,
+            poisson_scale=self.poisson_scale,
+            noise_types=self.noise_types,
+            seed=self.seed,
+        ) if has_noise else None
 
         self.video_source = None
         if self.frame_source == "video_file":
@@ -138,6 +149,8 @@ class SimulationSession:
             self.video_source = VideoFrameSource(self.video_path)
             if "dt" not in self.cfg and self.video_source.fps > 0:
                 self.dt = 1.0 / self.video_source.fps
+
+        plat_motion_cfg = self.cfg.get("platform_motion", self.cfg.get("disturbances", {}).get("platform_motion", None))
 
         self.env = Environment(
             target=self.target,
@@ -150,6 +163,7 @@ class SimulationSession:
             occluders=[],
             frame_source=self.frame_source,
             video_source=self.video_source,
+            platform_motion=plat_motion_cfg,
         )
 
         # Algorithmic modules
@@ -179,6 +193,8 @@ class SimulationSession:
         self.delayed_t = 0.0
         self.computed_zone = None
         self.prev_tracker_mode = "KF"
+        self.total_frames_processed = 0
+        self.active_locked_frames = 0
 
     def step(self) -> Dict[str, Any]:
         """Advance simulation by one dt time step and return frame telemetry."""
@@ -268,6 +284,15 @@ class SimulationSession:
         # 5. Tracking Error Calculation
         _, _, rad_err_rad = self.env.get_angular_tracking_error()
         rad_err_mrad = float(rad_err_rad * 1e3) if rad_err_rad is not None else None
+        rad_err_px = float(rad_err_rad * (self.camera.state.resolution[0] / self.camera.state.fov_x)) if rad_err_rad is not None else None
+
+        # Lock retention and target loss tracking
+        is_locked = (cur_mode in ["KF", "PF"]) and (rad_err_mrad is None or rad_err_mrad <= 2.0)
+        self.total_frames_processed += 1
+        if is_locked:
+            self.active_locked_frames += 1
+        unlocked = self.total_frames_processed - self.active_locked_frames
+        target_loss_percent = float((unlocked / max(1, self.total_frames_processed)) * 100.0)
 
         occ_info = None
         if active_occ:
@@ -286,6 +311,8 @@ class SimulationSession:
             "tracker_mode": cur_mode,
             "supervisor_state": self.state,
             "tracking_error_mrad": rad_err_mrad,
+            "tracking_error_px": rad_err_px,
+            "target_loss_percent": target_loss_percent,
             "active_occluder": occ_info,
             "reacq_zone": self.computed_zone if self.state == "SEARCHING" else None,
             "event_message": event_msg,
@@ -332,12 +359,16 @@ class VisualSimulatorUI:
 
     def load_scenarios(self) -> List[Dict[str, Any]]:
         """Load demo scenarios from config file."""
-        path = "config/demo_scenarios.json"
-        if not os.path.exists(path):
-            path = "configs/demo_scenarios.json"
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
+        candidates = [
+            get_resource_path("config/demo_scenarios.json"),
+            get_resource_path("configs/demo_scenarios.json"),
+            "config/demo_scenarios.json",
+            "configs/demo_scenarios.json",
+        ]
+        for path in candidates:
+            if path and os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    return json.load(f)
         return []
 
     def setup_ui(self) -> None:
@@ -447,12 +478,19 @@ class VisualSimulatorUI:
         self.lbl_frame_time = tk.Label(f_row, text="0 / 100  (0.00 s)", font=("Segoe UI", 9, "bold"), fg="#FFFFFF", bg="#121824")
         self.lbl_frame_time.pack(side=tk.RIGHT)
 
-        # Tracking Error
+        # Tracking Error (mrad & px)
         err_row = tk.Frame(info_frame, bg="#121824")
         err_row.pack(fill=tk.X, pady=2)
-        tk.Label(err_row, text="Radial Error:", font=("Segoe UI", 9), fg="#A0B0C4", bg="#121824").pack(side=tk.LEFT)
-        self.lbl_error = tk.Label(err_row, text="0.000 mrad", font=("Segoe UI", 10, "bold"), fg="#00FF88", bg="#121824")
+        tk.Label(err_row, text="Tracking Error:", font=("Segoe UI", 9), fg="#A0B0C4", bg="#121824").pack(side=tk.LEFT)
+        self.lbl_error = tk.Label(err_row, text="0.000 mrad | 0.0 px", font=("Segoe UI", 9, "bold"), fg="#00FF88", bg="#121824")
         self.lbl_error.pack(side=tk.RIGHT)
+
+        # Target Loss % (PS Item 18)
+        loss_row = tk.Frame(info_frame, bg="#121824")
+        loss_row.pack(fill=tk.X, pady=2)
+        tk.Label(loss_row, text="Target Loss %:", font=("Segoe UI", 9), fg="#A0B0C4", bg="#121824").pack(side=tk.LEFT)
+        self.lbl_loss = tk.Label(loss_row, text="0.0%", font=("Segoe UI", 9, "bold"), fg="#00FF88", bg="#121824")
+        self.lbl_loss.pack(side=tk.RIGHT)
 
         # Gauges (Confidence & Severity)
         gauge_box = tk.Frame(parent, bg="#182232", relief=tk.GROOVE, bd=1)
@@ -886,11 +924,20 @@ class VisualSimulatorUI:
         # 3. Numeric counters
         self.lbl_frame_time.config(text=f"{f_id} / {total_f}  ({sim_t:.2f} s)")
 
+        err_px = data.get("tracking_error_px")
+        loss_pct = data.get("target_loss_percent", 0.0)
+
         if err_mrad is not None:
             err_col = "#00FF88" if err_mrad < 2.0 else ("#FFAA00" if err_mrad < 6.0 else "#FF4757")
-            self.lbl_error.config(text=f"{err_mrad:.3f} mrad", fg=err_col)
+            if err_px is not None:
+                self.lbl_error.config(text=f"{err_mrad:.3f} mrad | {err_px:.1f} px", fg=err_col)
+            else:
+                self.lbl_error.config(text=f"{err_mrad:.3f} mrad", fg=err_col)
         else:
             self.lbl_error.config(text="N/A (No GT)", fg="#A0AEC0")
+
+        loss_col = "#00FF88" if loss_pct < 5.0 else ("#FFAA00" if loss_pct < 20.0 else "#FF4757")
+        self.lbl_loss.config(text=f"{loss_pct:.1f}%", fg=loss_col)
 
         # 4. Confidence Meter
         self.lbl_conf_val.config(text=f"{conf:.3f}")
@@ -912,10 +959,145 @@ class VisualSimulatorUI:
             self.log_event(event_msg)
 
 
+def run_cli_scenario(
+    scenario_selector: str = "0",
+    output_dir: str = "logs",
+    num_frames_override: Optional[int] = None,
+) -> int:
+    """
+    Run a simulation scenario headlessly from the command line,
+    step through all frames, and write performance report and telemetry logs.
+    """
+    import datetime
+    from metrics.batch_runner import BatchScenarioRunner
+
+    candidates = [
+        get_resource_path("config/demo_scenarios.json"),
+        get_resource_path("configs/demo_scenarios.json"),
+        "config/demo_scenarios.json",
+    ]
+    scenarios: List[Dict[str, Any]] = []
+    for c in candidates:
+        if c and os.path.exists(c):
+            with open(c, "r", encoding="utf-8") as f:
+                scenarios = json.load(f)
+            break
+
+    if not scenarios:
+        print("[ERROR] No demo scenarios found in config/demo_scenarios.json")
+        return 1
+
+    # Resolve target scenario by index or name
+    selected_scenario: Optional[Dict[str, Any]] = None
+    if scenario_selector.isdigit():
+        idx = int(scenario_selector)
+        if 0 <= idx < len(scenarios):
+            selected_scenario = scenarios[idx]
+    if selected_scenario is None:
+        for s in scenarios:
+            if s.get("scenario_name", "").lower() == scenario_selector.lower():
+                selected_scenario = s
+                break
+
+    if selected_scenario is None:
+        print(f"[ERROR] Could not find scenario matching '{scenario_selector}'. Available:")
+        for i, s in enumerate(scenarios):
+            print(f"  [{i}] {s.get('scenario_name')}")
+        return 1
+
+    scenario_cfg = dict(selected_scenario)
+    if num_frames_override is not None and num_frames_override > 0:
+        scenario_cfg["num_frames"] = num_frames_override
+
+    scen_name = scenario_cfg.get("scenario_name", "UNNAMED")
+    total_frames = int(scenario_cfg.get("num_frames", 100))
+    print(f"[FSOC PAT SIMULATOR] Running standalone CLI scenario: {scen_name} ({total_frames} frames)...")
+
+    runner = BatchScenarioRunner()
+    os.makedirs(output_dir, exist_ok=True)
+
+    t0 = time.perf_counter()
+    record = runner.run_scenario(scenario_cfg, use_hybrid_tracker=True)
+    elapsed = time.perf_counter() - t0
+
+    # Save performance report JSON
+    report_data = {
+        "scenario_name": scen_name,
+        "timestamp": datetime.datetime.now().isoformat(),
+        "total_frames": record.total_frames,
+        "elapsed_seconds": elapsed,
+        "fps": record.fps,
+        "metrics": record.to_dict(),
+    }
+    report_file = os.path.join(output_dir, "performance_report.json")
+    with open(report_file, "w", encoding="utf-8") as f:
+        json.dump(report_data, f, indent=2)
+
+    # Save detailed CSV if logger was used
+    if runner.last_logger is not None:
+        csv_path = os.path.join(output_dir, f"{scen_name}_telemetry.csv")
+        runner.last_logger.export_csv(csv_path)
+        print(f"  [LOG] Per-frame telemetry saved to: {csv_path}")
+
+    print(f"  [LOG] Performance report saved to: {report_file}")
+    print("\n" + "=" * 65)
+    print(f"  SCENARIO EXECUTION COMPLETE: {scen_name}")
+    print("=" * 65)
+    avg_err_mrad = record.avg_tracking_error if isinstance(record.avg_tracking_error, (int, float)) else 0.0
+    max_err_mrad = record.max_tracking_error if isinstance(record.max_tracking_error, (int, float)) else 0.0
+    avg_err_px = record.tracking_error_px if isinstance(record.tracking_error_px, (int, float)) else 0.0
+    rmse = record.rmse_px if isinstance(record.rmse_px, (int, float)) else 0.0
+    acq_t = record.acquisition_time_s if record.acquisition_time_s > 0 else record.acquisition_time
+
+    print(f"  Frames Processed   : {record.total_frames}")
+    print(f"  Elapsed Time       : {elapsed:.3f} s ({record.fps:.1f} FPS)")
+    print(f"  Acquisition Time   : {acq_t:.3f} s")
+    print(f"  Lock Retention Rate: {record.lock_retention_rate * 100.0:.1f}%")
+    print(f"  Target Loss        : {record.target_loss_percent:.2f}% (drops: {record.track_loss_count})")
+    print(f"  Avg Tracking Error : {avg_err_mrad:.3f} mrad ({avg_err_px:.1f} px)")
+    print(f"  Max Tracking Error : {max_err_mrad:.3f} mrad")
+    print(f"  RMSE Error         : {rmse:.2f} px")
+    print(f"  Tracker Breakdown  : {record.active_tracker_breakdown}")
+    print("=" * 65 + "\n")
+    return 0
+
+
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="FSOC Coarse PAT Simulator (ISRO / DOS PS 26169)")
+    parser.add_argument("--cli", action="store_true", help="Run in headless CLI mode without Tkinter GUI")
+    parser.add_argument("--run-scenario", type=str, default=None, help="Scenario name or index to execute (e.g. DEMO_ACQUISITION_AND_TRACK or 0)")
+    parser.add_argument("--frames", type=int, default=None, help="Override number of simulation frames")
+    parser.add_argument("--output-dir", type=str, default="logs", help="Directory to save performance report and telemetry logs")
+    parser.add_argument("--list-scenarios", action="store_true", help="List available scenario names and exit")
+
+    args, unknown = parser.parse_known_args()
+
+    if args.list_scenarios:
+        candidates = [
+            get_resource_path("config/demo_scenarios.json"),
+            get_resource_path("configs/demo_scenarios.json"),
+            "config/demo_scenarios.json",
+        ]
+        scenarios = []
+        for c in candidates:
+            if c and os.path.exists(c):
+                with open(c, "r", encoding="utf-8") as f:
+                    scenarios = json.load(f)
+                break
+        print("Available Demo Scenarios:")
+        for i, s in enumerate(scenarios):
+            print(f"  [{i}] {s.get('scenario_name')}: {s.get('description', '')}")
+        return 0
+
+    if args.cli or args.run_scenario is not None:
+        target_scenario = args.run_scenario or "0"
+        return run_cli_scenario(target_scenario, output_dir=args.output_dir, num_frames_override=args.frames)
+
     root = tk.Tk()
     app = VisualSimulatorUI(root)
     root.mainloop()
+    return 0
 
 
 if __name__ == "__main__":

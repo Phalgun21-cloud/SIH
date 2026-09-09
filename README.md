@@ -54,17 +54,35 @@ Represents the virtual pan-tilt gimbal camera state and optical properties.
 * `resolution`: Sensor pixel grid dimensions `(width, height)`.
 * `fov_bounds`: Computed property `(pan_min, pan_max, tilt_min, tilt_max)` for FOV containment checks.
 
-### 4. `DisturbanceConfig`
+### 4. `TargetConfig`
+Configures initial kinematics and parametric motion generation for single or multi-target scenarios:
+* `target_id`: String identifier for target discrimination.
+* `initial_pos`: `(x, y)` coordinates in angular space (radians).
+* `velocity`: `(vx, vy)` baseline velocity vector (rad/s).
+* `motion_type`: Selectable kinematic motion pattern:
+  * `"straight_line"`: Constant velocity rectilinear motion.
+  * `"circular"`: Bounded orbit with configurable `radius`, `angular_velocity`, and `center`.
+  * `"figure_eight"`: Lissajous 1:2 frequency lemniscate trajectory (`amplitude_x`, `amplitude_y`, `frequency`).
+  * `"random"`: Bounded 2D stochastic random-walk with specular boundary reflection.
+  * `"spiral"`: Expanding/contracting Archimedean spiral trajectory.
+  * `"sinusoidal"`: Transverse harmonic oscillation overlaid on directional drift.
+* `blink_frequency`: Modulation signature frequency (Hz) for multi-target identity verification.
+* `base_intensity`: Peak optical beacon brightness (counts).
+
+### 5. `DisturbanceConfig`
 Configures environmental and hardware disturbance intensities.
 * `cn2`: Refractive index structure constant $C_n^2$ for Kolmogorov atmospheric turbulence.
 * `vibration_amplitude`: Amplitude of platform jitter.
 * `vibration_frequency`: Dominant jitter frequency (Hz).
-* `noise_level`: Standard deviation of additive Gaussian sensor noise.
+* `noise_level`: Standard deviation of additive Gaussian sensor readout noise.
+* `noise_types`: Selectable list of active sensor noise models (e.g. `["gaussian"]`, `["poisson"]`, `["gaussian", "poisson", "salt_pepper"]`).
+* `poisson_scale`: Photon scaling factor for Poisson shot noise (photons per gray level).
+* `salt_pepper_prob`: Probability of hot/dead pixel impulse noise defects.
 * `occluder_frequency`: Frequency/probability of dynamic line-of-sight occluders.
 * `occluder_size`: Occluder radius / footprint (pixels).
 * `random_walk_jitter`: Platform drift rate.
 
-### 5. `MetricsRecord`
+### 6. `MetricsRecord`
 Exportable quantitative benchmark record for reporting and dashboards.
 * `simulation_duration`: Total elapsed run time (seconds).
 * `fps`: Frame processing rate.
@@ -105,7 +123,64 @@ Exportable quantitative benchmark record for reporting and dashboards.
 
 ## 🧪 Running Tests
 
-To run the complete automated test suite (57 unit tests across all modules):
+To run the complete automated test suite (114 unit and integration tests across all modules):
 ```bash
 python -m unittest discover -s tests
 ```
+
+---
+
+## 📦 Standalone Executable Packaging (PyInstaller)
+
+The simulator can be packaged into a completely standalone, portable Windows application that runs without requiring Python or any external packages installed.
+
+### 1. Build the Executable
+Run the automated packaging script:
+```bash
+python build_exe.py
+```
+Or build directly using the PyInstaller specification:
+```bash
+python -m PyInstaller fsoc_simulator.spec
+```
+
+### 2. Output Location & Structure
+The build generates a self-contained `--onedir` distribution:
+```text
+dist/
+└── FSOC_PAT_Simulator/
+    ├── FSOC_PAT_Simulator.exe   # Application entry point (~5.1 MB)
+    ├── config/                  # Bundled scenario configurations
+    │   ├── default_scenario.json
+    │   ├── demo_scenarios.json
+    │   └── scenarios.json
+    ├── data/
+    │   └── videos/              # Bundled benchmark test videos (~15 MB)
+    └── _internal/               # Bundled Python runtime, OpenCV, NumPy, and Tkinter DLLs
+```
+
+### 3. Packaging Mode Tradeoffs: `--onedir` vs `--onefile`
+* **`--onedir` (Default & Recommended)**:
+  * **Instant Startup (< 1s)**: Windows maps executable binaries and DLLs directly into memory without extraction overhead.
+  * **Portable & Inspectable**: The entire `dist/FSOC_PAT_Simulator/` folder can be zipped, moved to any Windows machine or USB drive, and run immediately. Configuration files in `config/` can be directly inspected or customized.
+* **`--onefile` (`python build_exe.py --onefile`)**:
+  * Bundles everything into a single `.exe`, but incurs a 5–15 second startup penalty on every launch because Windows must decompress the entire archive into a temporary folder (`%TEMP%/_MEIxxxxxx`).
+
+### 4. Running the Standalone Application
+
+* **Interactive Visual HUD (Tkinter GUI)**:
+  Double-click `FSOC_PAT_Simulator.exe` or launch from command prompt:
+  ```powershell
+  .\dist\FSOC_PAT_Simulator\FSOC_PAT_Simulator.exe
+  ```
+
+* **Headless / CLI Execution (Automated Verification & Benchmarking)**:
+  ```powershell
+  # List all available packaged scenarios
+  .\dist\FSOC_PAT_Simulator\FSOC_PAT_Simulator.exe --list-scenarios
+
+  # Run a specific scenario headlessly and export performance metrics
+  .\dist\FSOC_PAT_Simulator\FSOC_PAT_Simulator.exe --run-scenario DEMO_ACQUISITION_AND_TRACK --output-dir ./logs
+  ```
+
+
