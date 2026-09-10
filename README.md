@@ -123,7 +123,7 @@ Exportable quantitative benchmark record for reporting and dashboards.
 
 ## 🧪 Running Tests
 
-To run the complete automated test suite (114 unit and integration tests across all modules):
+To run the complete automated test suite (121 unit and integration tests across all modules):
 ```bash
 python -m unittest discover -s tests
 ```
@@ -139,30 +139,45 @@ Run the automated packaging script:
 ```bash
 python build_exe.py
 ```
+By default, `build_exe.py` outputs to a local, non-OneDrive path (`C:\FSOC_Build\dist` and `C:\FSOC_Build\work`) to prevent OneDrive Files-On-Demand corruption, and automatically generates a distribution ZIP `FSOC_PAT_Simulator_Windows_x64.zip`.
+
+Custom build directories can be passed via command-line arguments or environment variables:
+```bash
+# Custom base build directory (creates dist and work subfolders)
+python build_exe.py --build-dir D:\Builds\FSOC
+
+# Explicit distpath and workpath
+python build_exe.py --distpath C:\CustomDist --workpath C:\CustomWork
+
+# Or set environment variable
+set FSOC_BUILD_DIR=C:\FSOC_Build
+python build_exe.py
+```
 Or build directly using the PyInstaller specification:
 ```bash
-python -m PyInstaller fsoc_simulator.spec
+python -m PyInstaller fsoc_simulator.spec --distpath C:\FSOC_Build\dist --workpath C:\FSOC_Build\work
 ```
 
 ### 2. Output Location & Structure
 The build generates a self-contained `--onedir` distribution:
 ```text
-dist/
+C:\FSOC_Build\dist\
+├── FSOC_PAT_Simulator_Windows_x64.zip  # Ready-to-distribute submission archive (~76 MB)
 └── FSOC_PAT_Simulator/
-    ├── FSOC_PAT_Simulator.exe   # Application entry point (~5.1 MB)
-    ├── config/                  # Bundled scenario configurations
+    ├── FSOC_PAT_Simulator.exe          # Application entry point (~5.1 MB)
+    ├── config/                         # Bundled scenario configurations
     │   ├── default_scenario.json
     │   ├── demo_scenarios.json
     │   └── scenarios.json
     ├── data/
-    │   └── videos/              # Bundled benchmark test videos (~15 MB)
-    └── _internal/               # Bundled Python runtime, OpenCV, NumPy, and Tkinter DLLs
+    │   └── videos/                     # Bundled benchmark test videos (~15 MB)
+    └── _internal/                      # Bundled Python runtime, OpenCV, NumPy, and Tkinter DLLs
 ```
 
 ### 3. Packaging Mode Tradeoffs: `--onedir` vs `--onefile`
 * **`--onedir` (Default & Recommended)**:
   * **Instant Startup (< 1s)**: Windows maps executable binaries and DLLs directly into memory without extraction overhead.
-  * **Portable & Inspectable**: The entire `dist/FSOC_PAT_Simulator/` folder can be zipped, moved to any Windows machine or USB drive, and run immediately. Configuration files in `config/` can be directly inspected or customized.
+  * **Portable & Inspectable**: The entire `FSOC_PAT_Simulator/` folder can be zipped, moved to any Windows machine or USB drive, and run immediately. Configuration files in `config/` can be directly inspected or customized.
 * **`--onefile` (`python build_exe.py --onefile`)**:
   * Bundles everything into a single `.exe`, but incurs a 5–15 second startup penalty on every launch because Windows must decompress the entire archive into a temporary folder (`%TEMP%/_MEIxxxxxx`).
 
@@ -171,16 +186,33 @@ dist/
 * **Interactive Visual HUD (Tkinter GUI)**:
   Double-click `FSOC_PAT_Simulator.exe` or launch from command prompt:
   ```powershell
-  .\dist\FSOC_PAT_Simulator\FSOC_PAT_Simulator.exe
+  C:\FSOC_Build\dist\FSOC_PAT_Simulator\FSOC_PAT_Simulator.exe
   ```
 
 * **Headless / CLI Execution (Automated Verification & Benchmarking)**:
   ```powershell
   # List all available packaged scenarios
-  .\dist\FSOC_PAT_Simulator\FSOC_PAT_Simulator.exe --list-scenarios
+  C:\FSOC_Build\dist\FSOC_PAT_Simulator\FSOC_PAT_Simulator.exe --list-scenarios
 
   # Run a specific scenario headlessly and export performance metrics
-  .\dist\FSOC_PAT_Simulator\FSOC_PAT_Simulator.exe --run-scenario DEMO_ACQUISITION_AND_TRACK --output-dir ./logs
+  C:\FSOC_Build\dist\FSOC_PAT_Simulator\FSOC_PAT_Simulator.exe --run-scenario DEMO_ACQUISITION_AND_TRACK --output-dir C:\FSOC_Build\logs
   ```
+
+---
+
+## ⚠️ Troubleshooting & Known Issues
+
+### "Failed to import encodings module" Crash (OneDrive Files-On-Demand)
+
+* **Symptom**: When running `FSOC_PAT_Simulator.exe`, the process immediately terminates with:
+  ```text
+  Fatal Python error: init_fs_encoding: failed to get the Python codec of the filesystem encoding
+  Python runtime state: core initialized
+  ModuleNotFoundError: No module named 'encodings'
+  ```
+  or transient file permission errors (`[WinError 32]` / `[WinError 145]`) during packaging.
+* **Root Cause**: If the project repository or PyInstaller's output directory (`dist/` and `build/`) resides inside a OneDrive-synced folder (e.g., `C:\Users\<User>\OneDrive\...`), Microsoft OneDrive's **Files-On-Demand** filter driver intercepts file I/O and creates NTFS reparse points / sparse cloud stubs for newly written files in `_internal\`. At bootloader startup, the embedded C Python runtime attempts low-level synchronous block reads of `_internal\base_library.zip` and `_internal\encodings\`. Because OneDrive has not hydrated these stubs into local physical disk sectors, Python's bootstrap aborts before Python error handling can initialize.
+* **Fix**: Always build to and run from a local, non-synced drive or folder outside OneDrive. `build_exe.py` automatically defaults `--distpath` to `C:\FSOC_Build\dist` and `--workpath` to `C:\FSOC_Build\work`. If you must specify a custom directory, ensure its path does not contain `OneDrive`. If a build path inside OneDrive is detected, `build_exe.py` displays a prominent warning.
+
 
 
