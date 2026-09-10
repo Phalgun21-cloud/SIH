@@ -102,6 +102,8 @@ class Environment:
         self.sim_time = 0.0
         for tgt in self.targets:
             tgt.reset()
+        if self.video_source is not None:
+            self.video_source.reset()
         if self.platform_motion is not None:
             self.platform_motion.reset()
         if self.vibration is not None:
