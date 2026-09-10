@@ -604,6 +604,18 @@ class VisualSimulatorUI:
         )
         self.btn_reset.pack(side=tk.LEFT, padx=4)
 
+        self.btn_load_video = tk.Button(
+            btn_frame,
+            text="📁 Load Video",
+            font=("Segoe UI", 9, "bold"),
+            bg="#4A3F6B",
+            fg="#FFFFFF",
+            width=11,
+            relief=tk.FLAT,
+            command=self.browse_video_file,
+        )
+        self.btn_load_video.pack(side=tk.LEFT, padx=4)
+
         # Right: Speed Slider
         speed_frame = tk.Frame(parent, bg="#121824")
         speed_frame.pack(side=tk.RIGHT, padx=16, pady=10)
@@ -629,6 +641,41 @@ class VisualSimulatorUI:
     def on_scenario_changed(self, event=None) -> None:
         idx = self.cb_scenario.current()
         self.select_scenario(idx)
+
+    def browse_video_file(self) -> None:
+        """Open a file dialog to dynamically load an external video file into the simulator."""
+        from tkinter import filedialog
+        default_dir = get_resource_path("data/videos")
+        path = filedialog.askopenfilename(
+            initialdir=default_dir if os.path.exists(default_dir) else ".",
+            title="Select Laser / Optical Video File",
+            filetypes=[
+                ("Video Files", "*.mp4 *.avi *.ogv *.webm *.mkv"),
+                ("All Files", "*.*"),
+            ],
+        )
+        if path:
+            video_name = f"[VIDEO] {os.path.basename(path)}"
+            video_cfg = {
+                "scenario_name": video_name,
+                "category": "video_evaluation",
+                "frame_source": "video_file",
+                "video_path": path,
+                "num_frames": 500,
+                "target": {"initial_pos": [0.0, 0.0], "velocity": [0.0, 0.0]},
+                "disturbances": {},
+                "control": {
+                    "kp": 0.35, "ki": 0.0, "kd": 0.15, "k_ff": 1.0,
+                    "latency_frames": 1, "max_velocity": 0.5, "max_acceleration": 1.0
+                }
+            }
+            self.scenario_list.append(video_cfg)
+            names = [s.get("scenario_name", f"Scenario_{i}") for i, s in enumerate(self.scenario_list)]
+            self.cb_scenario["values"] = names
+            new_idx = len(self.scenario_list) - 1
+            self.cb_scenario.current(new_idx)
+            self.select_scenario(new_idx)
+            self.log_event(f"Loaded video source: {os.path.basename(path)}")
 
     def select_scenario(self, idx: int) -> None:
         if 0 <= idx < len(self.scenario_list):
