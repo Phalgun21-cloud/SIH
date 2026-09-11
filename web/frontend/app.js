@@ -256,8 +256,8 @@
     turbRegimeBadge: document.getElementById('turb-regime-badge'),
 
     // Transport Bar Elements
-    btnPlay: document.getElementById('btn-play'),
-    btnPause: document.getElementById('btn-pause'),
+    btnPlayPause: document.getElementById('btn-play-pause'),
+    
     btnStep: document.getElementById('btn-step'),
     btnReset: document.getElementById('btn-reset'),
     sliderSpeed: document.getElementById('slider-speed'),
@@ -462,6 +462,23 @@
       playSwitchChirp();
     }
     prevLocked = t.is_locked;
+    // Hero Lock Update
+    const heroLockText = document.getElementById('hero-lock-text');
+    const heroLockVal = document.getElementById('hero-lock-val');
+    const heroLockIcon = document.querySelector('.hero-lock-icon');
+    if (heroLockText && heroLockVal && heroLockIcon) {
+      heroLockText.textContent = t.is_locked ? 'BORESIGHT LOCKED' : 'SEARCHING';
+      heroLockVal.textContent = `${(t.lock_retention_rate || 100).toFixed(1)}%`;
+      heroLockIcon.style.color = t.is_locked ? 'var(--control-500)' : 'var(--alert-500)';
+      
+      if (t.is_locked !== prevLocked) {
+        // Trigger glow animation
+        heroLockIcon.parentElement.classList.remove('glow-pulse');
+        void heroLockIcon.parentElement.offsetWidth; // trigger reflow
+        heroLockIcon.parentElement.classList.add('glow-pulse');
+      }
+    }
+
     prevMode = t.tracker_mode;
 
     // Update Telemetry Badges

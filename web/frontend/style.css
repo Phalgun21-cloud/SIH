@@ -1878,3 +1878,342 @@ html, body {
   display: flex;
   justify-content: flex-end;
 }
+
+/* ==========================================================================
+   ULTRA-SIMPLIFIED AESTHETIC REDESIGN
+   Premium Dark Space Theme & Layout Fixes
+   ========================================================================== */
+
+:root {
+  --bg-space: #030508 !important;
+  --bg-panel: rgba(10, 15, 25, 0.6) !important;
+  --bg-panel-header: rgba(15, 20, 32, 0.8) !important;
+  --bg-surface: rgba(18, 25, 40, 0.7) !important;
+  --bg-recessed: rgba(5, 8, 14, 0.9) !important;
+
+  --border-subtle: rgba(40, 50, 70, 0.3) !important;
+  --border-panel: rgba(56, 189, 248, 0.15) !important;
+  --border-instrument: rgba(56, 189, 248, 0.25) !important;
+
+  --radius-xs: 8px !important;
+  --radius-sm: 12px !important;
+  --radius-md: 16px !important;
+}
+
+/* Glassmorphism for Panels */
+.station-panel, .hero-instrument-surface, .oscilloscope-surface, .station-header, .subsystem-nav-bar {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+
+/* 2-Column Clean Layout */
+.flight-ops-layout {
+  display: grid !important;
+  grid-template-columns: 1fr 340px !important;
+  gap: 12px !important;
+  height: 100% !important;
+}
+
+.visual-viewport-grid {
+  gap: 12px !important;
+  background: transparent !important;
+}
+
+.viewport-card {
+  border-radius: var(--radius-sm) !important;
+}
+
+.canvas-viewport, .camera-viewport {
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm) !important;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8) !important;
+}
+
+/* Hide dense technical jargon/panels */
+#fsm-badge,
+.reacq-tier-val,
+.fsm-status-badge,
+#turb-mini-r0, #turb-mini-rytov, #turb-mini-fade, #turb-mini-strehl, #turb-mini-regime,
+.turb-mini-group,
+.technical-legend,
+.telemetry-item:nth-child(5), /* Loop time */
+.telemetry-item:nth-child(3), /* Stream FPS */
+.console-panel /* Hide Event Log by default */
+{
+  display: none !important;
+}
+
+/* Clean up Typography */
+.t-val, .pill-val, .cap-title {
+  letter-spacing: 1px !important;
+}
+
+.mode-text {
+  font-size: 20px !important;
+  font-weight: 800 !important;
+  text-shadow: 0 0 10px rgba(56, 189, 248, 0.5) !important;
+}
+
+.primary-metric-val {
+  font-size: 24px !important;
+  font-weight: 800 !important;
+}
+
+/* Header Tweaks */
+.station-callsign {
+  font-size: 18px !important;
+  text-transform: uppercase !important;
+}
+
+.master-tab {
+  font-size: 13px !important;
+  padding: 8px 16px !important;
+  height: 38px !important;
+}
+
+/* ==========================================================================
+   MASTER PROMPT: PRESENTATION-LAYER REDESIGN
+   Deep Void Theme & Tri-Zone Layout Overrides
+   ========================================================================== */
+
+/* 1. Semantic Color System Overrides */
+:root {
+  --bg-void: #0A0E14 !important;
+  --surface-1: #111823 !important;
+  --surface-2: #1A2330 !important;
+  --border-hairline: #26313F !important;
+  
+  --text-primary: #E8EEF5 !important;
+  --text-muted: #8592A3 !important;
+  
+  --sim-500: #3E8EDE !important;
+  --sim-300: #9CC6F5 !important;
+  --track-500: #E0793A !important;
+  --track-300: #F5BE8C !important;
+  --control-500: #5FAF3A !important;
+  --control-300: #A9DD82 !important;
+  --eval-500: #8B7FE0 !important;
+  --eval-300: #C9C2F5 !important;
+  --alert-500: #E05C5C !important;
+  --alert-300: #F5B0B0 !important;
+  --neutral-500: #7C8794 !important;
+  
+  /* Map original variables to new semantic ones to avoid breaking hardcoded styles */
+  --bg-space: var(--bg-void) !important;
+  --bg-panel: var(--surface-1) !important;
+  --bg-panel-header: var(--surface-2) !important;
+  --bg-surface: var(--surface-2) !important;
+  --bg-recessed: var(--bg-void) !important;
+  --bg-input: var(--surface-2) !important;
+
+  --border-subtle: var(--border-hairline) !important;
+  --border-panel: var(--border-hairline) !important;
+  --border-instrument: var(--border-hairline) !important;
+  --border-focus: var(--sim-500) !important;
+
+  --color-cyan: var(--sim-500) !important;
+  --color-green: var(--control-500) !important;
+  --color-amber: var(--track-500) !important;
+  --color-red: var(--alert-500) !important;
+  --color-blue: var(--sim-500) !important;
+
+  /* Typography */
+  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', Consolas, monospace !important;
+}
+
+/* Base resets */
+body, html {
+  background-color: var(--bg-void) !important;
+  color: var(--text-primary) !important;
+}
+
+/* 2. Hero Metric in Header */
+.header-right {
+  display: flex !important;
+  align-items: center !important;
+  gap: 20px !important;
+}
+
+.hero-lock-status {
+  display: flex;
+  align-items: center;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  text-transform: uppercase;
+  background: var(--surface-2);
+  padding: 6px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border-hairline);
+  letter-spacing: 0.5px;
+}
+
+.hero-lock-val {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  margin-left: 8px;
+}
+
+.hero-lock-icon {
+  margin-right: 8px;
+  font-size: 14px;
+}
+
+/* Animation: 600ms soft glow-pulse */
+@keyframes glowPulse {
+  0% { text-shadow: 0 0 0 rgba(95, 175, 58, 0); }
+  50% { text-shadow: 0 0 16px rgba(95, 175, 58, 1); }
+  100% { text-shadow: 0 0 0 rgba(95, 175, 58, 0); }
+}
+
+.glow-pulse {
+  animation: glowPulse 600ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glow-pulse {
+    animation: none !important;
+  }
+}
+
+/* 3. Layout Grid Spacing (Tri-Zone) */
+.flight-ops-layout {
+  display: grid !important;
+  grid-template-columns: 300px 1fr 340px !important;
+  gap: 16px !important; /* 8px grid based */
+}
+
+/* Restore left-column as a discrete column for gimbal/radar */
+.visual-viewport-grid {
+  display: contents !important; /* Let children join parent grid */
+}
+
+.viewport-card {
+  padding: 16px !important;
+  border: 1px solid var(--border-hairline) !important;
+  border-radius: 8px !important;
+  background: var(--surface-1) !important;
+}
+
+.viewport-header {
+  background: transparent !important;
+  border-bottom: 1px solid var(--border-hairline) !important;
+  padding: 0 0 8px 0 !important;
+  margin-bottom: 12px !important;
+}
+
+/* Move FPS/Sim time to sub-row */
+.header-telemetry-strip {
+  position: absolute;
+  top: 48px;
+  right: 12px;
+  background: transparent !important;
+  border: none !important;
+  opacity: 0.7;
+}
+
+/* 4. Mute Sensor Noise */
+.camera-viewport {
+  background: #080C14 !important; /* Darker, less noisy */
+}
+
+/* 5. Target Box & Lock Confidence Badge Pop */
+.focal-bracket {
+  border-width: 2px !important;
+  border-color: var(--track-500) !important;
+  box-shadow: 0 0 8px var(--track-500);
+}
+.sensor-meta-stamp {
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: var(--text-primary) !important;
+  background: var(--track-500) !important;
+  border: none !important;
+  padding: 4px 8px !important;
+}
+
+/* 6. Disturbance Sliders */
+input[type=range] {
+  height: 6px !important;
+  background: var(--surface-2) !important;
+  border-radius: 4px !important;
+}
+input[type=range]::-webkit-slider-thumb {
+  width: 16px !important;
+  height: 16px !important;
+  background: var(--alert-500) !important;
+  border-radius: 50% !important;
+  cursor: pointer !important;
+}
+
+/* 7. Typography Hierarchy */
+.t-label, .cap-title, .v-title, .sm-label, .c-title {
+  font-family: var(--font-ui) !important;
+  color: var(--text-muted) !important;
+  text-transform: uppercase !important;
+  font-size: 11px !important;
+  letter-spacing: 0.5px !important;
+}
+
+.mono, .t-val, .err-val, .kpi-val, .turb-val {
+  font-family: var(--font-mono) !important;
+  font-size: 14px !important;
+  color: var(--text-primary) !important;
+}
+
+/* 8. Oscilloscope Chart Label Lane */
+.spec-limit-lane {
+  position: absolute;
+  top: 4px;
+  left: 8px;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  color: var(--alert-500);
+  z-index: 10;
+  background: rgba(10, 14, 20, 0.8);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* 9. Event Log Border Styling */
+.console-panel {
+  border-left: 4px solid var(--eval-500) !important;
+}
+.log-line.switch { border-left: 2px solid var(--control-500) !important; }
+.log-line.loss { border-left: 2px solid var(--alert-500) !important; }
+.log-line.reacq { border-left: 2px solid var(--track-500) !important; }
+
+/* 10. Hide Duplicate Lock Status since it's now in Hero */
+.hidden-data {
+  display: none !important;
+}
+
+/* 11. Tab Colors */
+.master-tab {
+  font-family: var(--font-ui) !important;
+  color: var(--text-muted) !important;
+  font-size: 13px !important;
+}
+.master-tab.active[data-panel="flight-ops"] { color: var(--sim-500) !important; border-bottom: 2px solid var(--sim-500) !important; text-shadow: 0 0 8px rgba(62,142,222,0.3) !important; }
+.master-tab.active[data-panel="hardware-control"] { color: var(--control-500) !important; border-bottom: 2px solid var(--control-500) !important; text-shadow: 0 0 8px rgba(95,175,58,0.3) !important; }
+.master-tab.active[data-panel="target-optics"] { color: var(--track-500) !important; border-bottom: 2px solid var(--track-500) !important; text-shadow: 0 0 8px rgba(224,121,58,0.3) !important; }
+.master-tab.active[data-panel="performance-metrics"] { color: var(--eval-500) !important; border-bottom: 2px solid var(--eval-500) !important; text-shadow: 0 0 8px rgba(139,127,224,0.3) !important; }
+
+/* 12. Fix label collision */
+.gimbal-azel-row {
+  margin-bottom: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--control-300);
+}
+
+.card-footer {
+  margin-top: 8px;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: center;
+  text-transform: uppercase;
+}
+
