@@ -27,3 +27,6 @@ packages = [
     "disturb",
     "metrics",
 ]
+
+[tool.vercel]
+entrypoint = "web.server:app"
