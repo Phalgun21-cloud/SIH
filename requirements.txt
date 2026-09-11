@@ -4,7 +4,7 @@
 # Core numerical, scientific, and vision packages
 numpy>=1.22.0
 scipy>=1.8.0
-opencv-python>=4.5.0
+opencv-python-headless>=4.5.0
 
 # Packaging & distribution
 setuptools>=61.0.0
