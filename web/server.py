@@ -1425,10 +1425,13 @@ async def websocket_simulation(websocket: WebSocket):
         sim_manager.disconnect_client(websocket)
 
 
-# Mount Static Frontend
-FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
-if FRONTEND_DIR.exists():
-    app.mount("/", StaticFiles(directory="web/frontend", html=True), name="frontend")
+# Mount Static Frontend for local dev only
+if not os.environ.get("VERCEL"):
+    FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
+    if FRONTEND_DIR.exists():
+        import fastapi.staticfiles
+        StaticCls = getattr(fastapi.staticfiles, "StaticFiles")
+        app.mount("/", StaticCls(directory=str(FRONTEND_DIR), html=True), name="frontend")
 
 
 if __name__ == "__main__":
