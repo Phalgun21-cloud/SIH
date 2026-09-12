@@ -20,15 +20,6 @@
   let activeScenario = null;
   let isLaserArmed = false;
 
-  // PID state
-  const pidState = {
-    kp: 42.50,
-    ki: 0.85,
-    kd: 12.30,
-    kff: 1.14,
-    feedforward: true
-  };
-
   // Atmospheric state
   let friedR0 = 8.5; // cm
   let currentBer = 1.2e-9;
@@ -146,10 +137,10 @@
     el.camSnrStat = document.getElementById('cam-snr-stat');
     el.camPowerDensity = document.getElementById('cam-power-density');
 
-    // Sidebar & FSM
-    el.btnModeEkf = document.getElementById('btn-mode-ekf');
+    // Sidebar & Filter
+    el.btnModeKalman = document.getElementById('btn-mode-kalman');
     el.btnModeParticle = document.getElementById('btn-mode-particle');
-    el.btnModeCoast = document.getElementById('btn-mode-coast');
+    el.activeFilterIndicator = document.getElementById('active-filter-indicator');
     el.fsmSupervisorState = document.getElementById('fsm-supervisor-state');
     el.fsmSubtitle = document.getElementById('fsm-subtitle');
     el.lockRetentionVal = document.getElementById('lock-retention-val');
@@ -170,14 +161,15 @@
     el.eventLogTerminal = document.getElementById('event-log-terminal');
     el.eventCounter = document.getElementById('event-counter');
 
-    // PID dock & Turbulence
-    el.pidKpVal = document.getElementById('pid-kp-val');
-    el.pidKiVal = document.getElementById('pid-ki-val');
-    el.pidKdVal = document.getElementById('pid-kd-val');
-    el.pidKffVal = document.getElementById('pid-kff-val');
-    el.atmosTurbVal = document.getElementById('atmos-turb-val');
-    el.atmosTurbBar = document.getElementById('atmos-turb-bar');
-    el.atmosTurbDesc = document.getElementById('atmos-turb-desc');
+    // Optical Video Ingest & Benchmarks
+    el.videoFileInputTop = document.getElementById('video-file-input-top');
+    el.videoFileInput = document.getElementById('video-file-input');
+    el.videoDropZone = document.getElementById('video-drop-zone');
+    el.videoBenchmarkSelect = document.getElementById('video-benchmark-select');
+    el.videoStatusText = document.getElementById('video-status-text');
+    el.videoMetaBadge = document.getElementById('video-meta-badge');
+    el.btnBrowseVideo = document.getElementById('btn-browse-video');
+    el.btnReloadVideo = document.getElementById('btn-reload-video');
 
     // Transport Bar
     el.btnStepPrev = document.getElementById('btn-step-prev');
@@ -222,8 +214,23 @@
     el.btnClearAtmoDisturb = document.getElementById('btn-clear-atmo-disturb');
   }
 
-  // WebSocket Connection
+  // WebSocket Connection Manager
+  let wsConnecting = false;
+  let wsReconnectTimer = null;
+  const pendingCommands = [];
+
   function initWebSocket() {
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+    if (wsConnecting) return;
+    wsConnecting = true;
+
+    if (wsReconnectTimer) {
+      clearTimeout(wsReconnectTimer);
+      wsReconnectTimer = null;
+    }
+
     const isFile = window.location.protocol === 'file:';
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = isFile || !window.location.host ? '127.0.0.1:8000' : window.location.host;
@@ -235,19 +242,30 @@
     }
 
     try {
+      if (ws) {
+        try { ws.close(); } catch (e) {}
+      }
       ws = new WebSocket(wsUrl);
     } catch (e) {
+      wsConnecting = false;
       console.warn('WebSocket init exception:', e);
-      setTimeout(initWebSocket, 2000);
+      wsReconnectTimer = setTimeout(initWebSocket, 2000);
       return;
     }
 
     ws.onopen = () => {
+      wsConnecting = false;
       if (el.transportStateBadge) {
         el.transportStateBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"></span> [ONLINE]';
         el.transportStateBadge.className = 'px-2 py-0.5 bg-secondary-container/20 border border-secondary text-label-sm font-label-sm text-secondary flex items-center gap-1';
       }
       logEvent('COMM', 'ISRO ground telemetry stream link established (Duplex 1000Hz).', 'secondary');
+
+      // Flush any queued commands
+      while (pendingCommands.length > 0) {
+        const c = pendingCommands.shift();
+        try { ws.send(JSON.stringify(c)); } catch (err) {}
+      }
     };
 
     ws.onmessage = (event) => {
@@ -260,14 +278,21 @@
     };
 
     ws.onclose = () => {
+      wsConnecting = false;
       if (el.transportStateBadge) {
         el.transportStateBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> [RECONNECTING]';
         el.transportStateBadge.className = 'px-2 py-0.5 bg-amber-500/20 border border-amber-500 text-label-sm font-label-sm text-amber-400 flex items-center gap-1';
       }
-      setTimeout(initWebSocket, 1500);
+      if (!wsReconnectTimer) {
+        wsReconnectTimer = setTimeout(() => {
+          wsReconnectTimer = null;
+          initWebSocket();
+        }, 2000);
+      }
     };
 
     ws.onerror = () => {
+      wsConnecting = false;
       if (el.transportStateBadge) {
         el.transportStateBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-error"></span> [OFFLINE]';
         el.transportStateBadge.className = 'px-2 py-0.5 bg-error/20 border border-error text-label-sm font-label-sm text-error flex items-center gap-1';
@@ -277,14 +302,14 @@
 
   function sendCommand(cmd) {
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(cmd));
+      try {
+        ws.send(JSON.stringify(cmd));
+      } catch (e) {
+        console.error('Failed to send WebSocket command:', e);
+      }
     } else {
+      pendingCommands.push(cmd);
       initWebSocket();
-      setTimeout(() => {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify(cmd));
-        }
-      }, 350);
     }
   }
 
@@ -360,8 +385,17 @@
         el.simTotalTime.textContent = `00:${String(Math.floor(totalSec / 60)).padStart(2, '0')}:${String((totalSec % 60).toFixed(0)).padStart(2, '0')}.000`;
       }
       updateTransportUI(false);
+      if (msg.is_video && msg.video_info) {
+        const vi = msg.video_info;
+        setVideoStatus(`${vi.filename} (${vi.width}x${vi.height}, ${vi.num_frames}f)`, 'ACTIVE', 'text-secondary');
+      }
       logEvent('SCENARIO', `Activated '${sc.scenario_name}' horizon: ${totalFrames} frames`, 'primary');
       setTimeout(() => sendCommand({ action: 'step' }), 100);
+    } else if (msg.type === 'filter_mode_updated') {
+      const isPf = (msg.tracker_mode === 'Particle Filter' || msg.tracker_mode === 'PF');
+      updateFilterButtons(isPf);
+      if (el.subTrackerMode) el.subTrackerMode.textContent = isPf ? 'PARTICLE FILTER' : 'KALMAN FILTER';
+      if (el.activeFilterIndicator) el.activeFilterIndicator.textContent = isPf ? 'PARTICLE' : 'KALMAN';
     } else if (msg.type === 'scenario_complete') {
       updateTransportUI(false);
       if (el.runStateBadge) el.runStateBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span> [LOCKED]';
@@ -443,12 +477,16 @@
     prevLocked = t.is_locked;
     prevMode = t.tracker_mode;
 
-    // Tracker Mode & FSM State
-    const mode = t.tracker_mode || 'KF';
+    // Active Filter State (Kalman Filter vs Particle Filter only)
+    const isPf = (t.tracker_mode === 'PF' || t.tracker_mode === 'Particle Filter');
+    const displayFilter = isPf ? 'PARTICLE FILTER' : 'KALMAN FILTER';
     if (el.subTrackerMode) {
-      el.subTrackerMode.textContent = mode === 'KF' ? 'KALMAN EXTENDED (EKF)' : mode === 'PF' ? 'PARTICLE FILTER (PF)' : 'COAST DIRECT';
+      el.subTrackerMode.textContent = displayFilter;
     }
-    updateModeChips(mode);
+    if (el.activeFilterIndicator) {
+      el.activeFilterIndicator.textContent = isPf ? 'PARTICLE' : 'KALMAN';
+    }
+    updateFilterButtons(isPf);
 
     const fsm = t.supervisor_state || 'TRACKING';
     if (el.fsmSupervisorState) {
@@ -581,19 +619,20 @@
     renderOscilloscope();
   }
 
-  function updateModeChips(activeMode) {
-    const map = {
-      'KF': el.btnModeEkf,
-      'PF': el.btnModeParticle,
-      'COAST': el.btnModeCoast
-    };
-    [el.btnModeEkf, el.btnModeParticle, el.btnModeCoast].forEach(b => {
-      if (!b) return;
-      b.className = 'py-1 px-1 text-center bg-surface-container-high border border-outline-variant text-on-surface-variant hover:text-on-surface text-label-sm font-label-sm cursor-pointer transition-colors';
-    });
-    const activeBtn = map[activeMode] || el.btnModeEkf;
-    if (activeBtn) {
-      activeBtn.className = 'py-1 px-1 text-center bg-primary-container text-on-primary border border-primary-container text-label-sm font-label-sm font-bold cursor-pointer shadow-[0_0_8px_#00E5FF]';
+  function updateFilterButtons(isPf) {
+    if (el.btnModeKalman) {
+      el.btnModeKalman.className = !isPf
+        ? 'py-1.5 px-2 text-center bg-primary text-background border border-primary text-label-sm font-label-sm font-bold font-mono cursor-pointer transition-all shadow-[0_0_10px_rgba(0,229,255,0.4)] flex items-center justify-center gap-1.5'
+        : 'py-1.5 px-2 text-center bg-surface-container-high border border-outline-variant text-on-surface-variant hover:text-on-surface text-label-sm font-label-sm font-bold font-mono cursor-pointer transition-all flex items-center justify-center gap-1.5';
+      const dot = el.btnModeKalman.querySelector('span');
+      if (dot) dot.className = !isPf ? 'w-2 h-2 rounded-full bg-background' : 'w-2 h-2 rounded-full bg-outline-variant';
+    }
+    if (el.btnModeParticle) {
+      el.btnModeParticle.className = isPf
+        ? 'py-1.5 px-2 text-center bg-primary text-background border border-primary text-label-sm font-label-sm font-bold font-mono cursor-pointer transition-all shadow-[0_0_10px_rgba(0,229,255,0.4)] flex items-center justify-center gap-1.5'
+        : 'py-1.5 px-2 text-center bg-surface-container-high border border-outline-variant text-on-surface-variant hover:text-on-surface text-label-sm font-label-sm font-bold font-mono cursor-pointer transition-all flex items-center justify-center gap-1.5';
+      const dot = el.btnModeParticle.querySelector('span');
+      if (dot) dot.className = isPf ? 'w-2 h-2 rounded-full bg-background' : 'w-2 h-2 rounded-full bg-outline-variant';
     }
   }
 
@@ -1039,7 +1078,7 @@
     if (el.btnSubsystemSettings) {
       el.btnSubsystemSettings.addEventListener('click', () => {
         clickTone();
-        const sec = document.getElementById('sec-pid');
+        const sec = document.getElementById('sec-video-ingest');
         if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
     }
@@ -1047,8 +1086,7 @@
     // 6. Navigation Ribbon Tabs
     const tabMap = [
       { tabId: 'tab-flight-ops', targetId: 'sec-radar' },
-      { tabId: 'tab-gimbal-lab', targetId: 'sec-pid' },
-      { tabId: 'tab-optics-lab', targetId: 'sec-cmos' },
+      { tabId: 'tab-video-lab', targetId: 'sec-video-ingest' },
       { tabId: 'tab-metrics-report', targetId: 'sec-oscilloscope' },
       { tabId: 'tab-mission-replay', targetId: 'sec-terminal' },
     ];
@@ -1076,9 +1114,8 @@
       el.btnLockBeacon.addEventListener('click', () => {
         initAudio();
         chirpLock();
-        sendCommand({ action: 'update_pid', kp: 45.0, ki: 1.2, kd: 14.0, k_ff: 1.2, enable_feedforward: true });
         sendCommand({ action: 'step' });
-        logEvent('LOCK', 'Manual Beacon Lock acquisition pulse commanded.', 'secondary');
+        logEvent('LOCK', 'Beacon Lock acquisition pulse commanded.', 'secondary');
       });
     }
 
@@ -1087,7 +1124,7 @@
       { id: 'nav-link-tracking', targetId: 'sec-radar' },
       { id: 'nav-optical-radar', targetId: 'sec-radar' },
       { id: 'nav-cmos-detector', targetId: 'sec-cmos' },
-      { id: 'nav-pid-dock', targetId: 'sec-pid' },
+      { id: 'nav-video-ingest', targetId: 'sec-video-ingest' },
       { id: 'nav-event-console', targetId: 'sec-terminal' },
       { id: 'nav-subsystem-health', targetId: 'sec-supervisor' },
       { id: 'nav-diagnostics', targetId: 'sec-oscilloscope' },
@@ -1125,36 +1162,25 @@
       });
     }
 
-    // 9. Algorithm Mode Switchers
-    function selectMode(m) {
+    // 9. Tracking Filter Mode Switchers (Kalman Filter vs Particle Filter only)
+    function selectFilterMode(filterName) {
       initAudio();
       chirpSwitch();
-      const modes = ['ekf', 'particle', 'coast'];
-      modes.forEach(modeName => {
-        const b = document.getElementById(`btn-mode-${modeName}`);
-        if (!b) return;
-        if (modeName === m) {
-          b.className = 'py-1 px-1 text-center bg-primary-container text-on-primary border border-primary-container text-label-sm font-label-sm font-bold cursor-pointer shadow-[0_0_8px_#00E5FF]';
-        } else {
-          b.className = 'py-1 px-1 text-center bg-surface-container-high border border-outline-variant text-on-surface-variant hover:text-on-surface text-label-sm font-label-sm cursor-pointer';
-        }
-      });
-      if (el.subTrackerMode) {
-        el.subTrackerMode.textContent = m === 'ekf' ? 'KALMAN EXTENDED (EKF)' : m === 'particle' ? 'PARTICLE FILTER (PF)' : 'COAST DIRECT';
-      }
-      if (m === 'ekf') {
-        sendCommand({ action: 'set_signature_verification', enabled: false });
-      } else if (m === 'particle') {
-        sendCommand({ action: 'set_signature_verification', enabled: true });
-      } else if (m === 'coast') {
-        sendCommand({ action: 'inject_occluder', duration_frames: 25, radius_rad: 0.012, opacity: 1.0 });
-      }
-      logEvent('MODE', `Switched active tracking filter to ${m.toUpperCase()}`, 'primary');
+      const isPf = (filterName === 'particle' || filterName === 'PF' || filterName === 'Particle Filter');
+      const activeMode = isPf ? 'PF' : 'KF';
+      const displayName = isPf ? 'PARTICLE FILTER' : 'KALMAN FILTER';
+
+      updateFilterButtons(isPf);
+      if (el.subTrackerMode) el.subTrackerMode.textContent = displayName;
+      if (el.activeFilterIndicator) el.activeFilterIndicator.textContent = isPf ? 'PARTICLE' : 'KALMAN';
+
+      sendCommand({ action: 'set_filter_mode', mode: activeMode });
+      sendCommand({ action: 'set_signature_verification', enabled: isPf });
+      logEvent('FILTER', `Active tracking filter switched to ${displayName}`, 'primary');
     }
 
-    if (el.btnModeEkf) el.btnModeEkf.addEventListener('click', () => selectMode('ekf'));
-    if (el.btnModeParticle) el.btnModeParticle.addEventListener('click', () => selectMode('particle'));
-    if (el.btnModeCoast) el.btnModeCoast.addEventListener('click', () => selectMode('coast'));
+    if (el.btnModeKalman) el.btnModeKalman.addEventListener('click', () => selectFilterMode('kalman'));
+    if (el.btnModeParticle) el.btnModeParticle.addEventListener('click', () => selectFilterMode('particle'));
 
     // 10. Oscilloscope Range Switchers
     const scopeRanges = [
@@ -1207,7 +1233,7 @@
       { id: 'log-filter-crit', tag: 'CRIT' },
       { id: 'log-filter-fsm', tag: 'FSM' },
       { id: 'log-filter-comm', tag: 'COMM' },
-      { id: 'log-filter-pid', tag: 'PID' },
+      { id: 'log-filter-video', tag: 'VIDEO' },
     ];
     filterButtons.forEach(f => {
       const btn = document.getElementById(f.id);
@@ -1228,91 +1254,155 @@
       }
     });
 
-    // 13. Interactive Atmospheric Turbulence Stepper
-    function updateTurbulence(delta) {
-      clickTone();
-      friedR0 = Math.max(2.0, Math.min(25.0, parseFloat((friedR0 + delta).toFixed(1))));
-      if (el.atmosTurbVal) el.atmosTurbVal.textContent = `${friedR0.toFixed(1)} cm`;
-      const pct = Math.round(((25.0 - friedR0) / (25.0 - 2.0)) * 100);
-      if (el.atmosTurbBar) el.atmosTurbBar.style.width = `${pct}%`;
-      const cn2 = (1e-13 / Math.pow(friedR0 / 10.0, 5/3));
-      sendCommand({ action: 'update_disturbances', cn2: cn2 });
-      if (el.atmosTurbDesc) {
-        el.atmosTurbDesc.textContent = friedR0 < 5.0 ? 'SEVERE TROPOSPHERIC TURBULENCE' : friedR0 < 10.0 ? 'MODERATE SCINTILLATION' : 'BENIGN FREE-SPACE PROPAGATION';
+    // 13. Optical Video Upload & Ingest Controls
+    async function uploadVideoFile(file) {
+      if (!file) return;
+      const validExts = ['.mp4', '.avi', '.webm', '.ogv', '.mkv'];
+      const ext = '.' + file.name.split('.').pop().toLowerCase();
+      if (!validExts.includes(ext)) {
+        alert(`Unsupported video format "${ext}". Allowed: ${validExts.join(', ')}`);
+        return;
       }
-      logEvent('ATMO', `Adjusted Fried r0 to ${friedR0.toFixed(1)} cm (Cn² ~ ${cn2.toExponential(2)})`, 'outline');
+
+      setVideoStatus(`Uploading ${file.name}...`, 'UPLOADING', 'text-amber-400');
+      logEvent('VIDEO', `Uploading optical video feed: ${file.name}...`, 'primary');
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const resp = await fetch('/api/simulation/upload_video', {
+          method: 'POST',
+          body: formData
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+          throw new Error(err.detail || 'Upload failed');
+        }
+        const data = await resp.json();
+        const vi = data.video_info || {};
+        setVideoStatus(
+          `${file.name} (${vi.width}x${vi.height}, ${vi.num_frames}f @ ${Math.round(vi.fps || 30)}fps)`,
+          'READY',
+          'text-secondary'
+        );
+        logEvent('VIDEO', `Decoded ${file.name} (${vi.width}x${vi.height}px, ${vi.num_frames} frames). Simulation initialized.`, 'secondary');
+        chirpLock();
+        setTimeout(() => sendCommand({ action: 'step' }), 250);
+      } catch (err) {
+        setVideoStatus(`Upload Error: ${err.message}`, 'FAILED', 'text-error');
+        logEvent('ERROR', `Failed uploading video: ${err.message}`, 'crit');
+      }
     }
-    const btnTurbDec = document.getElementById('btn-turb-dec');
-    const btnTurbInc = document.getElementById('btn-turb-inc');
-    const turbTrack = document.getElementById('atmos-turb-track');
-    if (btnTurbDec) btnTurbDec.addEventListener('click', () => updateTurbulence(-0.5));
-    if (btnTurbInc) btnTurbInc.addEventListener('click', () => updateTurbulence(0.5));
-    if (turbTrack) {
-      turbTrack.addEventListener('click', (e) => {
-        const rect = turbTrack.getBoundingClientRect();
-        const pct = (e.clientX - rect.left) / rect.width;
-        friedR0 = parseFloat((25.0 - pct * (25.0 - 2.0)).toFixed(1));
-        updateTurbulence(0);
+
+    function setVideoStatus(text, badge, badgeColor) {
+      if (el.videoStatusText) el.videoStatusText.textContent = text;
+      if (el.videoMetaBadge) {
+        el.videoMetaBadge.textContent = badge;
+        el.videoMetaBadge.className = `${badgeColor || 'text-secondary'} font-bold shrink-0`;
+      }
+    }
+
+    // Top Action Bar Upload input
+    if (el.videoFileInputTop) {
+      el.videoFileInputTop.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+          uploadVideoFile(e.target.files[0]);
+        }
       });
     }
 
-    // 14. PID Steppers
-    const setupStepper = (decId, incId, valId, key, step, min, max) => {
-      const dec = document.getElementById(decId);
-      const inc = document.getElementById(incId);
-      const valDisp = document.getElementById(valId);
-      const update = (delta) => {
+    // Dock Browse file input
+    if (el.videoFileInput) {
+      el.videoFileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+          uploadVideoFile(e.target.files[0]);
+        }
+      });
+    }
+
+    if (el.btnBrowseVideo && el.videoFileInput) {
+      el.btnBrowseVideo.addEventListener('click', () => {
         clickTone();
-        pidState[key] = Math.max(min, Math.min(max, parseFloat((pidState[key] + delta).toFixed(2))));
-        if (valDisp) valDisp.textContent = pidState[key].toFixed(2);
-        sendCommand({
-          action: 'update_pid',
-          kp: pidState.kp,
-          ki: pidState.ki,
-          kd: pidState.kd,
-          k_ff: pidState.kff,
-          enable_feedforward: pidState.feedforward
+        el.videoFileInput.click();
+      });
+    }
+
+    // Drag and drop zone
+    if (el.videoDropZone) {
+      el.videoDropZone.addEventListener('click', () => {
+        if (el.videoFileInput) el.videoFileInput.click();
+      });
+      ['dragenter', 'dragover'].forEach(evt => {
+        el.videoDropZone.addEventListener(evt, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          el.videoDropZone.classList.add('border-primary', 'bg-surface-container-high');
         });
-        logEvent('PID', `Tuned ${key.toUpperCase()} to ${pidState[key].toFixed(2)}`, 'secondary');
-      };
-      if (dec) dec.addEventListener('click', () => update(-step));
-      if (inc) inc.addEventListener('click', () => update(step));
-    };
+      });
+      ['dragleave', 'drop'].forEach(evt => {
+        el.videoDropZone.addEventListener(evt, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          el.videoDropZone.classList.remove('border-primary', 'bg-surface-container-high');
+        });
+      });
+      el.videoDropZone.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        if (dt && dt.files && dt.files[0]) {
+          uploadVideoFile(dt.files[0]);
+        }
+      });
+    }
 
-    setupStepper('btn-kp-dec', 'btn-kp-inc', 'pid-kp-val', 'kp', 1.0, 0.0, 100.0);
-    setupStepper('btn-ki-dec', 'btn-ki-inc', 'pid-ki-val', 'ki', 0.1, 0.0, 10.0);
-    setupStepper('btn-kd-dec', 'btn-kd-inc', 'pid-kd-val', 'kd', 0.5, 0.0, 30.0);
-    setupStepper('btn-kff-dec', 'btn-kff-inc', 'pid-kff-val', 'kff', 0.1, 0.0, 5.0);
-
-    // 15. PID Presets
-    const presets = {
-      'btn-preset-urban': { kp: 35.0, ki: 0.5, kd: 10.0, kff: 1.0, name: 'URBAN GROUND' },
-      'btn-preset-hialt': { kp: 45.0, ki: 1.2, kd: 14.0, kff: 1.2, name: 'HIGH ALTITUDE' },
-      'btn-preset-storm': { kp: 60.0, ki: 2.0, kd: 20.0, kff: 1.5, name: 'STORM PROFILE' },
-      'btn-preset-reset': { kp: 42.5, ki: 0.85, kd: 12.3, kff: 1.14, name: 'DEFAULTS' }
-    };
-    Object.entries(presets).forEach(([id, cfg]) => {
-      const btn = document.getElementById(id);
-      if (btn) {
-        btn.addEventListener('click', () => {
-          clickTone();
-          Object.assign(pidState, { kp: cfg.kp, ki: cfg.ki, kd: cfg.kd, kff: cfg.kff });
-          if (el.pidKpVal) el.pidKpVal.textContent = cfg.kp.toFixed(2);
-          if (el.pidKiVal) el.pidKiVal.textContent = cfg.ki.toFixed(2);
-          if (el.pidKdVal) el.pidKdVal.textContent = cfg.kd.toFixed(2);
-          if (el.pidKffVal) el.pidKffVal.textContent = cfg.kff.toFixed(2);
-          sendCommand({
-            action: 'update_pid',
-            kp: cfg.kp,
-            ki: cfg.ki,
-            kd: cfg.kd,
-            k_ff: cfg.kff,
-            enable_feedforward: true
+    // Benchmark selector loader
+    async function initVideoBenchmarks() {
+      if (!el.videoBenchmarkSelect) return;
+      try {
+        const resp = await fetch('/api/simulation/video_benchmarks');
+        if (!resp.ok) return;
+        const benchmarks = await resp.json();
+        if (Array.isArray(benchmarks) && benchmarks.length > 0) {
+          el.videoBenchmarkSelect.innerHTML = '<option value="" disabled selected>Select sample optical video...</option>';
+          benchmarks.forEach((b) => {
+            const opt = document.createElement('option');
+            opt.value = b.filename;
+            const title = (b.filename || '').replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ').toUpperCase();
+            opt.textContent = `${title} (${b.resolution}, ${b.frames}f)`;
+            el.videoBenchmarkSelect.appendChild(opt);
           });
-          logEvent('PID', `Applied ${cfg.name} gain matrix preset`, 'secondary');
-        });
+        }
+      } catch (err) {
+        console.warn('Failed loading video benchmarks:', err);
       }
-    });
+    }
+    initVideoBenchmarks();
+
+    if (el.videoBenchmarkSelect) {
+      el.videoBenchmarkSelect.addEventListener('change', (e) => {
+        const selFile = e.target.value;
+        if (!selFile) return;
+        const stem = selFile.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ').toUpperCase();
+        const allOpts = el.scenarioSelect ? Array.from(el.scenarioSelect.options) : [];
+        const matchIdx = allOpts.findIndex(opt => {
+          const t = opt.textContent.toUpperCase();
+          return t.includes(stem) || t.includes(selFile.toUpperCase());
+        });
+        if (matchIdx >= 0) {
+          el.scenarioSelect.selectedIndex = matchIdx;
+          sendCommand({ action: 'select_scenario', index: matchIdx });
+          logEvent('VIDEO', `Loaded benchmark optical video: ${selFile}`, 'primary');
+        }
+      });
+    }
+
+    if (el.btnReloadVideo) {
+      el.btnReloadVideo.addEventListener('click', () => {
+        clickTone();
+        sendCommand({ action: 'reset' });
+        setTimeout(() => sendCommand({ action: 'step' }), 200);
+      });
+    }
 
     // 16. Transport Bar Controls (Play / Pause / Step / Step Prev / Reset)
     if (el.btnPlay) {

@@ -235,7 +235,7 @@ class FullSimulationSession:
         self.delayed_p = 0.0
         self.delayed_t = 0.0
         self.computed_zone = None
-        self.prev_tracker_mode = "KF"
+        self.prev_tracker_mode = "Kalman Filter"
         self.total_frames_processed = 0
         self.active_locked_frames = 0
         self.manual_occluders.clear()
@@ -244,7 +244,7 @@ class FullSimulationSession:
         # Diagnostics & Root Cause
         self.last_root_cause: Optional[Dict[str, Any]] = None
         self.acquisition_time: Optional[float] = None
-        self.mode_counts = {"KF": 0, "PF": 0, "COAST": 0, "LOST": 0}
+        self.mode_counts = {"Kalman Filter": 0, "Particle Filter": 0}
         self.all_tracking_errors: List[float] = []
 
     # Dynamic Setters for full parameter control
@@ -343,6 +343,22 @@ class FullSimulationSession:
         self.enable_signature_verification = bool(enabled)
         if self.detector:
             self.detector.enable_signature_verification = self.enable_signature_verification
+
+    def set_tracker_mode(self, mode: str) -> None:
+        """Force the active tracking estimator: Kalman Filter or Particle Filter."""
+        m = str(mode).upper()
+        if "PARTICLE" in m or m == "PF":
+            if hasattr(self.hybrid_tracker, "_switch_to_pf"):
+                self.hybrid_tracker._switch_to_pf("Manual Filter Selection", 1.0)
+            else:
+                self.hybrid_tracker.active_mode = "PF"
+            self.prev_tracker_mode = "Particle Filter"
+        else:
+            if hasattr(self.hybrid_tracker, "_switch_to_kf"):
+                self.hybrid_tracker._switch_to_kf("Manual Filter Selection", 1.0)
+            else:
+                self.hybrid_tracker.active_mode = "KF"
+            self.prev_tracker_mode = "Kalman Filter"
 
     def inject_occluder(self, duration_frames: int = 18, radius_rad: float = 0.008, opacity: float = 1.0) -> None:
         cur_pos = (self.target.x, self.target.y) if hasattr(self.target, 'x') else self.init_pos
@@ -521,23 +537,26 @@ class FullSimulationSession:
                 event_msg = f"TRACK LOST ({cause}) -> Tier-1 Search Initiated"
                 event_type = "LOSS"
 
-        # Check for tracker mode switches (KF <-> PF)
-        cur_mode = est.tracker_mode if est is not None else "LOST"
-        if cur_mode != self.prev_tracker_mode and cur_mode in ["KF", "PF"] and self.prev_tracker_mode in ["KF", "PF"]:
-            event_msg = f"Tracker mode switched {self.prev_tracker_mode} -> {cur_mode} (Sev={self.hybrid_tracker.last_severity:.2f})"
+        # Check for tracker filter mode (strictly normalized to Kalman Filter or Particle Filter)
+        raw_mode = est.tracker_mode if est is not None else "KF"
+        is_pf = (raw_mode == "PF" or getattr(self.hybrid_tracker, "active_mode", "KF") == "PF")
+        clean_filter_name = "Particle Filter" if is_pf else "Kalman Filter"
+
+        if clean_filter_name != self.prev_tracker_mode:
+            event_msg = f"Tracking filter switched {self.prev_tracker_mode} -> {clean_filter_name} (Sev={self.hybrid_tracker.last_severity:.2f})"
             event_type = "MODE_SWITCH"
-        self.prev_tracker_mode = cur_mode
-        self.mode_counts[cur_mode] = self.mode_counts.get(cur_mode, 0) + 1
+        self.prev_tracker_mode = clean_filter_name
+        self.mode_counts[clean_filter_name] = self.mode_counts.get(clean_filter_name, 0) + 1
         t_track = (time.perf_counter() - t0) * 1000.0
 
         # Extract Particle Filter scatter cloud (subsampled) or Kalman Covariance Ellipse
         particle_scatter = []
         kalman_cov = None
-        if cur_mode == "PF" and hasattr(self.hybrid_tracker, "pf") and self.hybrid_tracker.pf.is_initialized:
+        if is_pf and hasattr(self.hybrid_tracker, "pf") and self.hybrid_tracker.pf.is_initialized:
             # Subsample 45 particles for visual rendering
             pts = self.hybrid_tracker.pf.particles[::6, :2]
             particle_scatter = [[round(float(p[0]), 5), round(float(p[1]), 5)] for p in pts]
-        elif cur_mode in ["KF", "COAST"] and hasattr(self.hybrid_tracker, "kf") and self.hybrid_tracker.kf.is_initialized:
+        elif hasattr(self.hybrid_tracker, "kf") and self.hybrid_tracker.kf.is_initialized:
             P = self.hybrid_tracker.kf.P
             kalman_cov = {
                 "sigma_x": round(float(np.sqrt(max(1e-10, P[0, 0]))), 5),
@@ -579,7 +598,7 @@ class FullSimulationSession:
             self.all_tracking_errors.append(rad_err_mrad)
 
         # Lock retention and target acquisition timing
-        is_locked = (cur_mode in ["KF", "PF"]) and (rad_err_mrad is None or rad_err_mrad <= 2.0)
+        is_locked = (clean_filter_name in ["Kalman Filter", "Particle Filter"]) and (rad_err_mrad is None or rad_err_mrad <= 2.0)
         self.total_frames_processed += 1
         if is_locked:
             self.active_locked_frames += 1
@@ -689,7 +708,7 @@ class FullSimulationSession:
             "target_in_fov": bool(target_in_fov),
             "confidence": round(conf_val, 4),
             "severity": round(float(getattr(self.hybrid_tracker, "last_severity", 0.0)), 4),
-            "tracker_mode": cur_mode,
+            "tracker_mode": clean_filter_name,
             "supervisor_state": self.state,
             "reacquisition_tier": self.reacq_ctrl.current_tier,
             "tier1_counter": self.reacq_ctrl.tier1_frame_counter,
@@ -779,7 +798,7 @@ class FullSimulationSession:
             "error_mrad": rad_err_mrad if rad_err_mrad is not None else 0.0,
             "confidence": conf_val,
             "severity": float(getattr(self.hybrid_tracker, "last_severity", 0.0)),
-            "mode": cur_mode,
+            "mode": clean_filter_name,
             "locked": is_locked,
         })
         if len(self.history_records) > 200:
@@ -974,10 +993,10 @@ class ComprehensiveSimulationManager:
         dead = []
         async def _send(ws):
             try:
-                await asyncio.wait_for(ws.send_text(msg_str), timeout=0.2)
+                await asyncio.wait_for(ws.send_text(msg_str), timeout=0.08)
             except Exception:
                 dead.append(ws)
-        await asyncio.gather(*[_send(ws) for ws in list(self.active_websockets)])
+        await asyncio.gather(*[_send(ws) for ws in list(self.active_websockets)], return_exceptions=True)
         for ws in dead:
             self.active_websockets.discard(ws)
 
@@ -1378,79 +1397,90 @@ async def websocket_simulation(websocket: WebSocket):
             except Exception:
                 continue
 
-            action = cmd.get("action")
-            sess = sim_manager.current_session
+            try:
+                action = cmd.get("action")
+                sess = sim_manager.current_session
 
-            if action == "play":
-                if "speed" in cmd: sim_manager.playback_speed = float(cmd["speed"])
-                sim_manager.start_playback()
-            elif action == "pause":
-                sim_manager.pause_playback()
-            elif action == "step":
-                sim_manager.pause_playback()
-                res = sim_manager.step()
-                await sim_manager.broadcast({"type": "telemetry", "data": res})
-            elif action == "step_prev":
-                sim_manager.pause_playback()
-                prev_f = max(0, (sim_manager.current_session.frame_id - 2) if sim_manager.current_session else 0)
-                res = sim_manager.seek(prev_f)
-                await sim_manager.broadcast({"type": "telemetry", "data": res})
-            elif action == "seek":
-                sim_manager.pause_playback()
-                target_f = int(cmd.get("frame", 0))
-                res = sim_manager.seek(target_f)
-                await sim_manager.broadcast({"type": "telemetry", "data": res})
-            elif action == "reset":
-                sim_manager.reset_playback()
-                await sim_manager.broadcast({"type": "reset", "frame_id": 0})
-            elif action == "set_speed":
-                sim_manager.playback_speed = float(cmd.get("speed", 1.0))
-            elif action == "select_scenario":
-                idx = cmd.get("index", 0)
-                res = sim_manager.load_scenario(idx)
-                await sim_manager.broadcast({"type": "scenario_loaded", "scenario": res})
-            elif action == "set_colormap":
-                if sess: sess.colormap_mode = cmd.get("colormap", "turbo")
-            elif action == "update_disturbances":
-                if sess:
-                    if "cn2" in cmd: sess.set_cn2(float(cmd["cn2"]))
-                    if "vibration_amp" in cmd:
-                        sess.set_vibration(float(cmd["vibration_amp"]), float(cmd.get("vibration_freq", sess.vib_freq)))
-                    if "noise_std" in cmd: sess.set_noise(std=float(cmd["noise_std"]))
-                    if "poisson_scale" in cmd: sess.set_noise(poisson_scale=float(cmd["poisson_scale"]))
-                    if "salt_pepper_prob" in cmd: sess.set_noise(salt_pepper_prob=float(cmd["salt_pepper_prob"]))
-                    if "noise_types" in cmd: sess.set_noise(noise_types=cmd["noise_types"])
-            elif action == "update_pid":
-                if sess:
-                    sess.set_pid(
-                        kp=cmd.get("kp"), ki=cmd.get("ki"), kd=cmd.get("kd"),
-                        k_ff=cmd.get("k_ff"), enable_feedforward=cmd.get("enable_feedforward"),
-                    )
-            elif action == "update_control_hardware":
-                if sess:
-                    sess.set_slew_limits(max_vel=cmd.get("max_velocity"), max_acc=cmd.get("max_acceleration"))
-                    if "latency_frames" in cmd: sess.set_latency(int(cmd["latency_frames"]))
-                    sess.set_reacquisition_params(
-                        enable_predictive=cmd.get("enable_predictive_search"),
-                        tier1_budget=cmd.get("tier1_budget"),
-                        scan_rate=cmd.get("scan_rate"),
-                    )
-            elif action == "set_auto_exposure":
-                if sess: sess.set_auto_exposure(bool(cmd.get("enabled", True)))
-            elif action == "set_signature_verification":
-                if sess: sess.set_signature_verification(bool(cmd.get("enabled", False)))
-            elif action == "set_primary_target":
-                if sess and "target_id" in cmd: sess.set_primary_target(cmd["target_id"])
-            elif action == "set_target_motion":
-                if sess and "motion_type" in cmd:
-                    sess.set_target_motion(cmd["motion_type"], target_id=cmd.get("target_id"))
-            elif action == "inject_occluder":
-                if sess:
-                    sess.inject_occluder(
-                        duration_frames=int(cmd.get("duration_frames", 18)),
-                        radius_rad=float(cmd.get("radius_rad", 0.008)),
-                        opacity=float(cmd.get("opacity", 1.0)),
-                    )
+                if action == "play":
+                    if "speed" in cmd: sim_manager.playback_speed = float(cmd["speed"])
+                    sim_manager.start_playback()
+                elif action == "pause":
+                    sim_manager.pause_playback()
+                elif action == "step":
+                    sim_manager.pause_playback()
+                    res = sim_manager.step()
+                    await sim_manager.broadcast({"type": "telemetry", "data": res})
+                elif action == "step_prev":
+                    sim_manager.pause_playback()
+                    prev_f = max(0, (sim_manager.current_session.frame_id - 2) if sim_manager.current_session else 0)
+                    res = sim_manager.seek(prev_f)
+                    await sim_manager.broadcast({"type": "telemetry", "data": res})
+                elif action == "seek":
+                    sim_manager.pause_playback()
+                    target_f = int(cmd.get("frame", 0))
+                    res = sim_manager.seek(target_f)
+                    await sim_manager.broadcast({"type": "telemetry", "data": res})
+                elif action == "reset":
+                    sim_manager.reset_playback()
+                    await sim_manager.broadcast({"type": "reset", "frame_id": 0})
+                elif action == "set_speed":
+                    sim_manager.playback_speed = float(cmd.get("speed", 1.0))
+                elif action == "select_scenario":
+                    idx = cmd.get("index", 0)
+                    res = sim_manager.load_scenario(idx)
+                    await sim_manager.broadcast({"type": "scenario_loaded", "scenario": res})
+                elif action == "set_colormap":
+                    if sess: sess.colormap_mode = cmd.get("colormap", "turbo")
+                elif action == "update_disturbances":
+                    if sess:
+                        if "cn2" in cmd: sess.set_cn2(float(cmd["cn2"]))
+                        if "vibration_amp" in cmd:
+                            sess.set_vibration(float(cmd["vibration_amp"]), float(cmd.get("vibration_freq", sess.vib_freq)))
+                        if "noise_std" in cmd: sess.set_noise(std=float(cmd["noise_std"]))
+                        if "poisson_scale" in cmd: sess.set_noise(poisson_scale=float(cmd["poisson_scale"]))
+                        if "salt_pepper_prob" in cmd: sess.set_noise(salt_pepper_prob=float(cmd["salt_pepper_prob"]))
+                        if "noise_types" in cmd: sess.set_noise(noise_types=cmd["noise_types"])
+                elif action == "update_pid":
+                    if sess:
+                        sess.set_pid(
+                            kp=cmd.get("kp"), ki=cmd.get("ki"), kd=cmd.get("kd"),
+                            k_ff=cmd.get("k_ff"), enable_feedforward=cmd.get("enable_feedforward"),
+                        )
+                elif action == "update_control_hardware":
+                    if sess:
+                        sess.set_slew_limits(max_vel=cmd.get("max_velocity"), max_acc=cmd.get("max_acceleration"))
+                        if "latency_frames" in cmd: sess.set_latency(int(cmd["latency_frames"]))
+                        sess.set_reacquisition_params(
+                            enable_predictive=cmd.get("enable_predictive_search"),
+                            tier1_budget=cmd.get("tier1_budget"),
+                            scan_rate=cmd.get("scan_rate"),
+                        )
+                elif action == "set_auto_exposure":
+                    if sess: sess.set_auto_exposure(bool(cmd.get("enabled", True)))
+                elif action == "set_signature_verification":
+                    if sess: sess.set_signature_verification(bool(cmd.get("enabled", False)))
+                elif action == "set_primary_target":
+                    if sess and "target_id" in cmd: sess.set_primary_target(cmd["target_id"])
+                elif action == "set_target_motion":
+                    if sess and "motion_type" in cmd:
+                        sess.set_target_motion(cmd["motion_type"], target_id=cmd.get("target_id"))
+                elif action == "inject_occluder":
+                    if sess:
+                        sess.inject_occluder(
+                            duration_frames=int(cmd.get("duration_frames", 18)),
+                            radius_rad=float(cmd.get("radius_rad", 0.008)),
+                            opacity=float(cmd.get("opacity", 1.0)),
+                        )
+                elif action in ["set_tracker_mode", "set_filter_mode"]:
+                    if sess and "mode" in cmd:
+                        sess.set_tracker_mode(cmd["mode"])
+                        filter_display = "Particle Filter" if ("PARTICLE" in str(cmd["mode"]).upper() or str(cmd["mode"]).upper() == "PF") else "Kalman Filter"
+                        await sim_manager.broadcast({
+                            "type": "filter_mode_updated",
+                            "tracker_mode": filter_display
+                        })
+            except Exception as cmd_err:
+                print(f"Error executing WebSocket action '{cmd.get('action')}': {cmd_err}")
     except WebSocketDisconnect:
         sim_manager.disconnect_client(websocket)
     except Exception:

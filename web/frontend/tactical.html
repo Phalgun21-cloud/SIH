@@ -212,10 +212,16 @@
 <!-- Scenario Selector -->
 <div class="flex items-center gap-1 bg-surface-container border border-outline-variant px-2 py-0.5 text-label-sm font-label-sm text-on-surface">
 <span class="material-symbols-outlined text-primary-container text-sm">satellite_alt</span>
-<select id="scenario-select" class="bg-transparent border-0 text-on-surface font-mono text-label-sm focus:outline-none cursor-pointer max-w-[280px]">
+<select id="scenario-select" class="bg-transparent border-0 text-on-surface font-mono text-label-sm focus:outline-none cursor-pointer max-w-[260px]">
   <option value="" disabled selected>Loading scenarios...</option>
 </select>
 </div>
+<!-- Upload Video Action Button -->
+<label for="video-file-input-top" class="px-2.5 py-1 text-label-sm font-label-sm bg-primary text-background font-bold hover:brightness-110 transition-all uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-[0_0_10px_rgba(0,229,255,0.3)]" title="Upload custom video benchmark (.mp4, .avi, .webm, .mkv)">
+  <span class="material-symbols-outlined text-sm font-bold">upload_file</span>
+  <span>UPLOAD VIDEO</span>
+  <input type="file" id="video-file-input-top" accept=".mp4,.avi,.webm,.ogv,.mkv" class="hidden" />
+</label>
 <!-- Laser Arm Secondary Action (from JSON) -->
 <button id="btn-laser-arm" class="px-2.5 py-1 text-label-md font-label-md bg-tertiary-container/10 border border-tertiary-fixed-dim text-tertiary-fixed hover:bg-tertiary-container/30 transition-colors uppercase tracking-wider flex items-center gap-1 cursor-pointer">
 <span class="material-symbols-outlined text-sm">tune</span>
@@ -246,13 +252,9 @@
 <span class="material-symbols-outlined text-sm">radar</span>
 FLIGHT OPERATIONS (ACTIVE)
 </button>
-<button id="tab-gimbal-lab" class="tab-ribbon text-on-surface-variant hover:text-on-surface pb-0.5 font-medium transition-colors text-label-md font-label-md flex items-center gap-1.5 h-full cursor-pointer">
-<span class="material-symbols-outlined text-sm">adjust</span>
-GIMBAL CONTROL LAB
-</button>
-<button id="tab-optics-lab" class="tab-ribbon text-on-surface-variant hover:text-on-surface pb-0.5 font-medium transition-colors text-label-md font-label-md flex items-center gap-1.5 h-full cursor-pointer">
-<span class="material-symbols-outlined text-sm">biotech</span>
-OPTICS &amp; TURBULENCE
+<button id="tab-video-lab" class="tab-ribbon text-on-surface-variant hover:text-on-surface pb-0.5 font-medium transition-colors text-label-md font-label-md flex items-center gap-1.5 h-full cursor-pointer">
+<span class="material-symbols-outlined text-sm">movie</span>
+VIDEO BENCHMARKS
 </button>
 <button id="tab-metrics-report" class="tab-ribbon text-on-surface-variant hover:text-on-surface pb-0.5 font-medium transition-colors text-label-md font-label-md flex items-center gap-1.5 h-full cursor-pointer">
 <span class="material-symbols-outlined text-sm">query_stats</span>
@@ -271,8 +273,8 @@ MISSION REPLAY &amp; EXPORT
 </div>
 <div class="h-3 w-px bg-outline-variant"></div>
 <div class="flex items-center gap-1.5">
-<span class="text-on-surface-variant">TRACKER:</span>
-<span id="sub-tracker-mode" class="text-primary-container font-semibold">KALMAN EXTENDED (EKF)</span>
+<span class="text-on-surface-variant">FILTER:</span>
+<span id="sub-tracker-mode" class="text-primary font-bold font-mono">KALMAN FILTER</span>
 </div>
 <div class="h-3 w-px bg-outline-variant"></div>
 <div class="flex items-center gap-1.5">
@@ -326,9 +328,9 @@ MISSION REPLAY &amp; EXPORT
 <span class="material-symbols-outlined text-base">biotech</span>
 <span>CMOS DETECTOR</span>
 </a>
-<a id="nav-pid-dock" class="sidenav-item text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface px-3 py-2 flex items-center gap-3 text-label-sm font-label-sm transition-colors cursor-pointer" href="#sec-pid">
-<span class="material-symbols-outlined text-base">tune</span>
-<span>PID SERVO DOCK</span>
+<a id="nav-video-ingest" class="sidenav-item text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface px-3 py-2 flex items-center gap-3 text-label-sm font-label-sm transition-colors cursor-pointer" href="#sec-video-ingest">
+<span class="material-symbols-outlined text-base text-primary">movie</span>
+<span>VIDEO INGEST</span>
 </a>
 <a id="nav-spectral-ber" class="sidenav-item text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface px-3 py-2 flex items-center gap-3 text-label-sm font-label-sm transition-colors cursor-pointer" href="#sec-oscilloscope">
 <span class="material-symbols-outlined text-base">query_stats</span>
@@ -441,16 +443,21 @@ MISSION REPLAY &amp; EXPORT
 </section>
 <!-- RIGHT TELEMETRY & SUPERVISOR SIDEBAR (3 Cols) -->
 <section id="sec-supervisor" class="col-span-12 lg:col-span-3 bg-surface-container border border-outline-variant flex flex-col h-[380px] p-2 justify-between transition-all duration-300">
-<!-- Tracker Filter Mode Switcher -->
+<!-- Tracker Filter Mode Switcher (Kalman vs Particle Only) -->
 <div>
 <div class="flex justify-between items-center pb-1.5 border-b border-outline-variant mb-2">
-<span class="text-label-sm font-label-sm text-on-surface-variant">TRACKER ALGORITHM</span>
-<span class="text-label-sm font-label-sm text-secondary font-mono">LOOP 1000Hz</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant font-bold uppercase tracking-wider">TRACKING FILTER</span>
+<span id="active-filter-indicator" class="text-label-sm font-label-sm text-primary font-mono font-bold">KALMAN</span>
 </div>
-<div class="grid grid-cols-3 gap-1">
-<button id="btn-mode-ekf" class="py-1 px-1 text-center bg-primary-container/20 border border-primary-container text-primary text-label-sm font-label-sm font-bold cursor-pointer">EKF (ACT)</button>
-<button id="btn-mode-particle" class="py-1 px-1 text-center bg-surface-container-high border border-outline-variant text-on-surface-variant hover:text-on-surface text-label-sm font-label-sm cursor-pointer">PARTICLE</button>
-<button id="btn-mode-coast" class="py-1 px-1 text-center bg-surface-container-high border border-outline-variant text-on-surface-variant hover:text-on-surface text-label-sm font-label-sm cursor-pointer">COAST</button>
+<div class="grid grid-cols-2 gap-2">
+<button id="btn-mode-kalman" class="py-1.5 px-2 text-center bg-primary text-background border border-primary text-label-sm font-label-sm font-bold font-mono cursor-pointer transition-all shadow-[0_0_10px_rgba(0,229,255,0.4)] flex items-center justify-center gap-1.5">
+  <span class="w-2 h-2 rounded-full bg-background"></span>
+  KALMAN FILTER
+</button>
+<button id="btn-mode-particle" class="py-1.5 px-2 text-center bg-surface-container-high border border-outline-variant text-on-surface-variant hover:text-on-surface text-label-sm font-label-sm font-bold font-mono cursor-pointer transition-all flex items-center justify-center gap-1.5">
+  <span class="w-2 h-2 rounded-full bg-outline-variant"></span>
+  PARTICLE FILTER
+</button>
 </div>
 </div>
 <!-- Big FSM Supervisor State Block -->
@@ -507,7 +514,7 @@ MISSION REPLAY &amp; EXPORT
 </div>
 </section>
 </div>
-<!-- LOWER SECTION: OSCILLOSCOPE, EVENT CONSOLE & HARDWARE PID DOCK -->
+<!-- LOWER SECTION: OSCILLOSCOPE, EVENT CONSOLE & OPTICAL VIDEO INGEST DOCK -->
 <div class="grid grid-cols-12 gap-2 shrink-0">
 <!-- OSCILLOSCOPE 4-CHANNEL DISPLAY (5 Cols) -->
 <section id="sec-oscilloscope" class="col-span-12 lg:col-span-5 bg-surface-container border border-outline-variant flex flex-col h-64 transition-all duration-300">
@@ -567,7 +574,7 @@ Ch4: BER (<span id="scope-ch4-val">1.2e-9</span>)
 <button id="log-filter-crit" class="log-filter-btn px-1.5 py-0.5 bg-surface-container text-on-surface-variant hover:text-on-surface cursor-pointer">[CRIT]</button>
 <button id="log-filter-fsm" class="log-filter-btn px-1.5 py-0.5 bg-surface-container text-on-surface-variant hover:text-on-surface cursor-pointer">[FSM]</button>
 <button id="log-filter-comm" class="log-filter-btn px-1.5 py-0.5 bg-surface-container text-on-surface-variant hover:text-on-surface cursor-pointer">[COMM]</button>
-<button id="log-filter-pid" class="log-filter-btn px-1.5 py-0.5 bg-surface-container text-on-surface-variant hover:text-on-surface cursor-pointer">[PID]</button>
+<button id="log-filter-video" class="log-filter-btn px-1.5 py-0.5 bg-surface-container text-on-surface-variant hover:text-on-surface cursor-pointer">[VIDEO]</button>
 </div>
 </div>
 <!-- Log Content Area -->
@@ -581,88 +588,53 @@ Ch4: BER (<span id="scope-ch4-val">1.2e-9</span>)
 <span id="event-counter">0 EVENTS</span>
 </div>
 </section>
-<!-- HARDWARE PID GAIN CALIBRATION & OPTICS DOCK (3 Cols) -->
-<section id="sec-pid" class="col-span-12 lg:col-span-3 bg-surface-container border border-outline-variant flex flex-col h-64 justify-between p-2 transition-all duration-300">
-<div>
-<div class="flex justify-between items-center pb-1.5 border-b border-outline-variant mb-2">
-<div class="flex items-center gap-1 text-label-md font-label-md font-bold text-on-surface">
-<span class="material-symbols-outlined text-sm text-primary">tune</span>
-<span>PID GAIN &amp; OPTICS DOCK</span>
-</div>
-<span class="text-[9px] font-mono text-secondary">SERVO AUTO</span>
-</div>
-<!-- Stepper Grid Controls -->
-<div class="grid grid-cols-2 gap-2 text-label-sm font-label-sm">
-<!-- Kp Stepper -->
-<div class="bg-surface-container-low border border-outline-variant p-1">
-<div class="flex justify-between text-outline">
-<span>Kp (PROP)</span>
-<span id="pid-kp-val" class="text-primary font-mono">42.50</span>
-</div>
-<div class="flex gap-1 mt-1">
-<button id="btn-kp-dec" class="flex-1 bg-surface-variant hover:bg-surface-bright text-center text-on-surface cursor-pointer">-</button>
-<button id="btn-kp-inc" class="flex-1 bg-surface-variant hover:bg-surface-bright text-center text-on-surface cursor-pointer">+</button>
-</div>
-</div>
-<!-- Ki Stepper -->
-<div class="bg-surface-container-low border border-outline-variant p-1">
-<div class="flex justify-between text-outline">
-<span>Ki (INT)</span>
-<span id="pid-ki-val" class="text-primary font-mono">0.85</span>
-</div>
-<div class="flex gap-1 mt-1">
-<button id="btn-ki-dec" class="flex-1 bg-surface-variant hover:bg-surface-bright text-center text-on-surface cursor-pointer">-</button>
-<button id="btn-ki-inc" class="flex-1 bg-surface-variant hover:bg-surface-bright text-center text-on-surface cursor-pointer">+</button>
-</div>
-</div>
-<!-- Kd Stepper -->
-<div class="bg-surface-container-low border border-outline-variant p-1">
-<div class="flex justify-between text-outline">
-<span>Kd (DERIV)</span>
-<span id="pid-kd-val" class="text-primary font-mono">12.30</span>
-</div>
-<div class="flex gap-1 mt-1">
-<button id="btn-kd-dec" class="flex-1 bg-surface-variant hover:bg-surface-bright text-center text-on-surface cursor-pointer">-</button>
-<button id="btn-kd-inc" class="flex-1 bg-surface-variant hover:bg-surface-bright text-center text-on-surface cursor-pointer">+</button>
-</div>
-</div>
-<!-- Kff Stepper -->
-<div class="bg-surface-container-low border border-outline-variant p-1">
-<div class="flex justify-between text-outline">
-<span>Kff (FEEDFWD)</span>
-<span id="pid-kff-val" class="text-primary font-mono">1.14</span>
-</div>
-<div class="flex gap-1 mt-1">
-<button id="btn-kff-dec" class="flex-1 bg-surface-variant hover:bg-surface-bright text-center text-on-surface cursor-pointer">-</button>
-<button id="btn-kff-inc" class="flex-1 bg-surface-variant hover:bg-surface-bright text-center text-on-surface cursor-pointer">+</button>
-</div>
-</div>
-</div>
-<!-- Atmospheric Turbulence Parameter -->
-<div class="mt-2 bg-surface-container-low border border-outline-variant p-1.5 text-label-sm font-label-sm">
-<div class="flex justify-between items-center text-on-surface-variant">
-<span>ATMOS TURBULENCE (Fried r0):</span>
-<div class="flex items-center gap-1 font-mono font-bold text-tertiary-fixed-dim">
-  <button id="btn-turb-dec" class="px-1.5 py-0.2 bg-surface-variant hover:bg-surface-bright text-on-surface border border-outline-variant cursor-pointer text-[10px]">-</button>
-  <span id="atmos-turb-val">8.5 cm</span>
-  <button id="btn-turb-inc" class="px-1.5 py-0.2 bg-surface-variant hover:bg-surface-bright text-on-surface border border-outline-variant cursor-pointer text-[10px]">+</button>
-</div>
-</div>
-<div id="atmos-turb-track" class="w-full bg-surface-container-lowest h-1.5 mt-1 cursor-pointer">
-<div id="atmos-turb-bar" class="bg-tertiary-fixed-dim h-full w-[42%] transition-all"></div>
-</div>
-<div id="atmos-turb-desc" class="text-[8px] text-outline mt-0.5">MODERATE TROPOSPHERIC SCINTILLATION</div>
-</div>
-</div>
-<!-- Preset Selection Buttons -->
-<div class="border-t border-outline-variant pt-2">
-<div class="grid grid-cols-4 gap-1 text-[8px] font-mono text-center">
-<button id="btn-preset-urban" class="py-1 bg-surface-container-high border border-outline-variant hover:border-primary text-on-surface-variant hover:text-primary cursor-pointer">URBAN</button>
-<button id="btn-preset-hialt" class="py-1 bg-surface-container-high border border-outline-variant hover:border-primary text-on-surface-variant hover:text-primary cursor-pointer">HI-ALT</button>
-<button id="btn-preset-storm" class="py-1 bg-surface-container-high border border-outline-variant hover:border-primary text-on-surface-variant hover:text-primary cursor-pointer">STORM</button>
-<button id="btn-preset-reset" class="py-1 bg-surface-variant border border-outline-variant text-on-surface hover:text-error cursor-pointer">RESET</button>
-</div>
-</div>
+<!-- OPTICAL VIDEO INGEST & BENCHMARKS DOCK (3 Cols) -->
+<section id="sec-video-ingest" class="col-span-12 lg:col-span-3 bg-surface-container border border-outline-variant flex flex-col h-64 justify-between p-2.5 transition-all duration-300">
+  <div class="space-y-2">
+    <!-- Dock Header -->
+    <div class="flex justify-between items-center pb-1.5 border-b border-outline-variant">
+      <div class="flex items-center gap-1.5 text-label-md font-label-md font-bold text-on-surface">
+        <span class="material-symbols-outlined text-sm text-primary">movie</span>
+        <span>OPTICAL VIDEO INGEST</span>
+      </div>
+      <span class="text-[9px] font-mono text-secondary px-1 py-0.2 bg-secondary/10 border border-secondary/30">OPENCV FEED</span>
+    </div>
+
+    <!-- Drag & Drop Upload Zone -->
+    <div id="video-drop-zone" class="border-2 border-dashed border-outline-variant hover:border-primary bg-surface-container-lowest p-2.5 flex flex-col items-center justify-center text-center cursor-pointer transition-colors group">
+      <input type="file" id="video-file-input" accept=".mp4,.avi,.webm,.ogv,.mkv" class="hidden" />
+      <span class="material-symbols-outlined text-2xl text-primary/70 group-hover:text-primary transition-colors">cloud_upload</span>
+      <div class="text-[11px] font-bold text-on-surface mt-1">DRAG &amp; DROP VIDEO HERE</div>
+      <div class="text-[9px] text-on-surface-variant">or <span class="text-primary underline">browse from disk</span> (.mp4, .avi, .webm)</div>
+    </div>
+
+    <!-- Quick Benchmark Selector -->
+    <div class="bg-surface-container-low border border-outline-variant p-1.5 space-y-1">
+      <div class="flex justify-between items-center text-[10px] text-on-surface-variant font-mono">
+        <span>SAMPLE BENCHMARKS:</span>
+        <span id="benchmark-count" class="text-primary text-[9px]">6 READY</span>
+      </div>
+      <select id="video-benchmark-select" class="w-full bg-surface-container-highest border border-outline-variant text-on-surface font-mono text-[10px] px-1.5 py-1 focus:outline-none focus:border-primary cursor-pointer">
+        <option value="" disabled selected>Select sample optical video...</option>
+      </select>
+    </div>
+
+    <!-- Video Upload Status & Info Banner -->
+    <div id="video-status-banner" class="bg-surface-container-lowest border border-outline-variant p-1.5 text-[9px] font-mono flex items-center justify-between text-on-surface-variant">
+      <span id="video-status-text" class="truncate max-w-[185px]">Ready for video upload</span>
+      <span id="video-meta-badge" class="text-secondary font-bold shrink-0">STANDBY</span>
+    </div>
+  </div>
+
+  <!-- Dock Footer Actions -->
+  <div class="border-t border-outline-variant pt-1.5 flex justify-between items-center text-[9px] font-mono gap-1">
+    <button id="btn-browse-video" class="flex-1 py-1 bg-primary text-background font-bold text-center tracking-wider uppercase hover:brightness-110 transition-all cursor-pointer">
+      BROWSE FILE
+    </button>
+    <button id="btn-reload-video" class="px-2 py-1 bg-surface-container-high border border-outline-variant hover:border-primary text-on-surface-variant hover:text-on-surface cursor-pointer" title="Reset video playback">
+      <span class="material-symbols-outlined text-xs align-middle">restart_alt</span>
+    </button>
+  </div>
 </section>
 </div>
 </main>
@@ -757,7 +729,7 @@ Ch4: BER (<span id="scope-ch4-val">1.2e-9</span>)
     </div>
     <div class="p-2.5 bg-surface-container-lowest border border-outline-variant text-[11px] text-on-surface leading-relaxed space-y-1">
       <div class="text-primary font-bold">ALGORITHM BENCHMARK SUMMARY:</div>
-      <div>• Extended Kalman Filter (EKF) converged within 1 frame under moderate Kolmogorov turbulence (r0=8.5cm).</div>
+      <div>• Kalman Filter converged within 1 frame under moderate Kolmogorov turbulence (r0=8.5cm).</div>
       <div>• Slew-rate constrained servo controller eliminated overshoot and avoided platform mechanical saturation.</div>
       <div>• Centroid spot verification sustained 1000Hz equivalent real-time telemetry loop (&lt;10ms compute latency).</div>
     </div>
