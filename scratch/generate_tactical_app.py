@@ -1,4 +1,23 @@
-/**
+"""
+Generate the fully wired tactical_app.js for the Stitch Minimalist Tactical Mission Terminal.
+Provides:
+- Optical CMOS Camera real-time image feed using t.camera_frame (with zero broken alt images)
+- Complete 4-Channel Oscilloscope including Channel 4: Spectral BER (Bit Error Rate & OSNR)
+- Dedicated interactive SPECTRAL BER & Optical Link Quality modal dialog and PSD waterfall canvas
+- Full transport operations bar (Play, Pause, Step Next, Step Prev, Reset, Speeds 0.25x-5x, click-to-scrub Timeline)
+- Algorithm Mode Switchers (EKF, PARTICLE, COAST) with tone feedback and backend dispatch
+- Laser Arm button toggle (ARMED vs STANDBY) with warning tone and status change
+- Lock Beacon CTA with acquisition pulse
+- Filterable Terminal Event Console with filter chips ([ALL], [CRIT], [FSM], [COMM], [PID])
+- Interactive Atmospheric Turbulence Stepper & Bar (adjusts Fried r0 and Cn2 disturbances)
+- Interactive Hardware PID gain steppers and quick presets
+- Workspace navigation tabs and SideNav smooth scrolling with visual card focus
+- Interactive SIH Report Audit Modal dialog with live computed mission statistics
+- Web Audio synthesized mission tone chirps
+- 2D World Radar Canvas renderer and Optical CMOS Sensor overlay canvas
+"""
+
+app_js_content = r'''/**
  * DRISHTI-PAT MK-IV Tactical Mission Control Client Engine
  * Full bidirectional telemetry integration for Stitch Minimalist Tactical Terminal
  */
@@ -1481,3 +1500,8 @@
     init();
   }
 })();
+'''
+
+with open('web/frontend/tactical_app.js', 'w', encoding='utf-8') as f:
+    f.write(app_js_content)
+print(f"Written web/frontend/tactical_app.js: {len(app_js_content)} bytes")

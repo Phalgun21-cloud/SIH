@@ -972,11 +972,12 @@ class ComprehensiveSimulationManager:
             return
         msg_str = json.dumps(message)
         dead = []
-        for ws in self.active_websockets:
+        async def _send(ws):
             try:
-                await ws.send_text(msg_str)
+                await asyncio.wait_for(ws.send_text(msg_str), timeout=0.2)
             except Exception:
                 dead.append(ws)
+        await asyncio.gather(*[_send(ws) for ws in list(self.active_websockets)])
         for ws in dead:
             self.active_websockets.discard(ws)
 
@@ -984,12 +985,26 @@ class ComprehensiveSimulationManager:
         if not self.current_session:
             raise RuntimeError("No active simulation session")
         if self.current_session.frame_id >= self.current_session.num_frames:
-            self.is_running = False
-            return {"completed": True, "frame_id": self.current_session.frame_id}
+            self.current_session.reset()
         telemetry = self.current_session.step()
         return telemetry
 
+    def seek(self, target_frame: int) -> Dict[str, Any]:
+        if not self.current_session:
+            raise RuntimeError("No active simulation session")
+        target_frame = max(0, min(self.current_session.num_frames - 1, int(target_frame)))
+        if target_frame < self.current_session.frame_id:
+            self.current_session.reset()
+        telemetry = None
+        while self.current_session.frame_id <= target_frame:
+            telemetry = self.current_session.step()
+        if telemetry is None:
+            telemetry = self.current_session.step()
+        return telemetry
+
     def start_playback(self):
+        if self.current_session and self.current_session.frame_id >= self.current_session.num_frames:
+            self.current_session.reset()
         self.is_running = True
         if self._loop_task is None or self._loop_task.done():
             self._loop_task = asyncio.create_task(self._simulation_loop())
@@ -1005,17 +1020,24 @@ class ComprehensiveSimulationManager:
     async def _simulation_loop(self):
         while self.is_running:
             start_t = time.perf_counter()
-            if self.current_session and self.current_session.frame_id < self.current_session.num_frames:
-                telemetry = self.current_session.step()
-                payload = {
-                    "type": "telemetry",
-                    "data": telemetry,
-                    "completed": False,
-                }
-                await self.broadcast(payload)
+            if self.current_session:
                 if self.current_session.frame_id >= self.current_session.num_frames:
+                    self.current_session.reset()
+                try:
+                    telemetry = self.current_session.step()
+                    payload = {
+                        "type": "telemetry",
+                        "data": telemetry,
+                        "completed": False,
+                    }
+                    await self.broadcast(payload)
+                    if self.current_session.frame_id >= self.current_session.num_frames:
+                        self.is_running = False
+                        await self.broadcast({"type": "scenario_complete", "frame_id": self.current_session.frame_id})
+                        break
+                except Exception as e:
+                    print(f"Error in simulation loop: {e}")
                     self.is_running = False
-                    await self.broadcast({"type": "scenario_complete", "frame_id": self.current_session.frame_id})
                     break
             else:
                 self.is_running = False
@@ -1367,6 +1389,16 @@ async def websocket_simulation(websocket: WebSocket):
             elif action == "step":
                 sim_manager.pause_playback()
                 res = sim_manager.step()
+                await sim_manager.broadcast({"type": "telemetry", "data": res})
+            elif action == "step_prev":
+                sim_manager.pause_playback()
+                prev_f = max(0, (sim_manager.current_session.frame_id - 2) if sim_manager.current_session else 0)
+                res = sim_manager.seek(prev_f)
+                await sim_manager.broadcast({"type": "telemetry", "data": res})
+            elif action == "seek":
+                sim_manager.pause_playback()
+                target_f = int(cmd.get("frame", 0))
+                res = sim_manager.seek(target_f)
                 await sim_manager.broadcast({"type": "telemetry", "data": res})
             elif action == "reset":
                 sim_manager.reset_playback()

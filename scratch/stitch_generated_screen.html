@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>DRISHTI-PAT MK-IV // FSOC GROUND TERMINAL SIMULATOR</title>
+<!-- Google Fonts & Material Symbols -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&amp;family=Space+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS with custom theme config -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "on-surface": "#dfe2ef",
+            "surface-bright": "#353943",
+            "background": "#0f131c",
+            "on-tertiary": "#472a00",
+            "surface-container-lowest": "#0a0e17",
+            "primary": "#c3f5ff",
+            "secondary-fixed": "#6ffbbe",
+            "surface-container-low": "#181b25",
+            "inverse-on-surface": "#2c303a",
+            "secondary": "#4edea3",
+            "on-primary-container": "#00626e",
+            "on-secondary-fixed-variant": "#005236",
+            "surface-variant": "#31353f",
+            "surface-container-highest": "#31353f",
+            "secondary-container": "#00a572",
+            "on-primary": "#00363d",
+            "surface-container-high": "#262a34",
+            "on-secondary-container": "#00311f",
+            "tertiary-fixed-dim": "#ffb95f",
+            "inverse-surface": "#dfe2ef",
+            "surface-container": "#1c1f29",
+            "on-error": "#690005",
+            "surface-dim": "#0f131c",
+            "tertiary-fixed": "#ffddb8",
+            "outline-variant": "#3b494c",
+            "on-secondary": "#003824",
+            "surface-tint": "#00daf3",
+            "primary-fixed": "#9cf0ff",
+            "on-primary-fixed": "#001f24",
+            "surface": "#0f131c",
+            "on-surface-variant": "#bac9cc",
+            "on-error-container": "#ffdad6",
+            "on-primary-fixed-variant": "#004f58",
+            "on-tertiary-fixed": "#2a1700",
+            "inverse-primary": "#006875",
+            "tertiary": "#ffe9d3",
+            "on-tertiary-fixed-variant": "#653e00",
+            "secondary-fixed-dim": "#4edea3",
+            "on-secondary-fixed": "#002113",
+            "on-background": "#dfe2ef",
+            "on-tertiary-container": "#7e4e00",
+            "primary-fixed-dim": "#00daf3",
+            "primary-container": "#00e5ff",
+            "tertiary-container": "#ffc681",
+            "error": "#ffb4ab",
+            "error-container": "#93000a",
+            "outline": "#849396"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "space-xl": "1.5rem",
+            "gutter": "0.75rem",
+            "space-md": "0.75rem",
+            "space-sm": "0.5rem",
+            "margin": "1rem",
+            "space-xs": "0.25rem",
+            "space-lg": "1rem",
+            "gutter-dense": "0.375rem"
+          },
+          "fontFamily": {
+            "label-lg": ["JetBrains Mono"],
+            "headline-lg": ["Space Grotesk"],
+            "body-md": ["JetBrains Mono"],
+            "headline-xl": ["Space Grotesk"],
+            "label-sm": ["JetBrains Mono"],
+            "body-sm": ["JetBrains Mono"],
+            "label-md": ["JetBrains Mono"],
+            "headline-sm": ["Space Grotesk"],
+            "headline-md": ["Space Grotesk"],
+            "body-lg": ["JetBrains Mono"]
+          },
+          "fontSize": {
+            "label-lg": ["12px", { "lineHeight": "14px", "letterSpacing": "0.08em", "fontWeight": "600" }],
+            "headline-lg": ["24px", { "lineHeight": "30px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+            "body-md": ["13px", { "lineHeight": "18px", "letterSpacing": "0em", "fontWeight": "400" }],
+            "headline-xl": ["32px", { "lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+            "label-sm": ["9px", { "lineHeight": "10px", "letterSpacing": "0.12em", "fontWeight": "500" }],
+            "body-sm": ["11px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "400" }],
+            "label-md": ["10px", { "lineHeight": "12px", "letterSpacing": "0.1em", "fontWeight": "500" }],
+            "headline-sm": ["14px", { "lineHeight": "18px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+            "headline-md": ["18px", { "lineHeight": "24px", "letterSpacing": "0em", "fontWeight": "600" }],
+            "body-lg": ["15px", { "lineHeight": "22px", "letterSpacing": "0em", "fontWeight": "400" }]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+      font-size: 16px;
+      line-height: 1;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    .hud-glow {
+      box-shadow: inset 0 0 12px rgba(0, 229, 255, 0.08), 0 0 8px rgba(0, 229, 255, 0.22);
+    }
+    .hud-glow-green {
+      box-shadow: inset 0 0 12px rgba(78, 222, 163, 0.08), 0 0 8px rgba(78, 222, 163, 0.22);
+    }
+    .reticle-grid {
+      background-size: 24px 24px;
+      background-image: 
+        linear-gradient(to right, rgba(59, 73, 76, 0.25) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(59, 73, 76, 0.25) 1px, transparent 1px);
+    }
+    .sensor-crosshair {
+      background: radial-gradient(circle at center, rgba(0, 229, 255, 0.25) 0%, rgba(15, 19, 28, 0.95) 75%);
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #0a0e17;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #3b494c;
+    }
+    .caution-stripe {
+      background: repeating-linear-gradient(
+        -45deg,
+        rgba(255, 180, 171, 0.15),
+        rgba(255, 180, 171, 0.15) 6px,
+        rgba(147, 0, 10, 0.35) 6px,
+        rgba(147, 0, 10, 0.35) 12px
+      );
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface font-body-sm antialiased select-none h-screen w-screen overflow-hidden flex flex-col justify-between">
+<!-- ========================================================================= -->
+<!-- 1. TOP COMMAND HEADER (ANCHOR: TopNavBar & Mission Workstation Bar)       -->
+<!-- ========================================================================= -->
+<header class="flex justify-between items-center w-full px-4 h-12 bg-surface-container-lowest border-b border-outline-variant select-none shrink-0 z-50">
+<!-- Brand / Node Identification -->
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-2">
+<span class="w-2.5 h-2.5 rounded-full bg-primary-container animate-ping"></span>
+<span class="text-headline-sm font-headline-sm font-bold text-primary tracking-wider">DRISHTI-PAT MK-IV</span>
+</div>
+<div class="h-4 w-px bg-outline-variant"></div>
+<span class="px-1.5 py-0.5 border border-outline-variant bg-surface-container font-label-sm text-label-sm text-on-surface-variant">
+        GROUND TERMINAL WORKSTATION // ISRO-SIH DEPT-PAT-09
+      </span>
+<div class="hidden xl:flex items-center gap-1.5">
+<span class="px-2 py-0.5 bg-surface-container-high border border-outline-variant text-label-sm font-label-sm text-primary">
+          [SCENARIO: LEO_ORBIT_PASS_04]
+        </span>
+<span class="px-2 py-0.5 bg-secondary-container/20 border border-secondary text-label-sm font-label-sm text-secondary flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"></span>
+          [ONLINE]
+        </span>
+<span class="px-2 py-0.5 bg-primary-container/20 border border-primary-container text-label-sm font-label-sm text-primary-container flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-primary-container"></span>
+          [LIVE]
+        </span>
+</div>
+</div>
+<!-- Center Tabular Telemetry Chips -->
+<div class="hidden lg:flex items-center gap-2 border border-outline-variant px-3 py-1 bg-surface-container-low">
+<div class="flex items-center gap-2 border-r border-outline-variant pr-3">
+<span class="text-on-surface-variant font-label-sm text-label-sm">FRAME:</span>
+<span class="font-label-md text-label-md text-on-surface">0045 / 0100</span>
+<div class="w-12 h-1.5 bg-surface-variant rounded-none overflow-hidden">
+<div class="h-full bg-primary-container w-[45%]"></div>
+</div>
+</div>
+<div class="flex items-center gap-2 border-r border-outline-variant pr-3">
+<span class="text-on-surface-variant font-label-sm text-label-sm">STREAM:</span>
+<span class="font-label-md text-label-md text-secondary">30.0 FPS</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant">(0.12ms)</span>
+</div>
+<div class="flex items-center gap-2 border-r border-outline-variant pr-3">
+<span class="text-on-surface-variant font-label-sm text-label-sm">LOOP LATENCY:</span>
+<span class="font-label-md text-label-md text-primary font-bold">6.2 ms</span>
+<span class="text-label-sm font-label-sm text-secondary">&lt;10ms TARGET</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-on-surface-variant font-label-sm text-label-sm">SIM T+:</span>
+<span class="font-label-md text-label-md text-primary-container font-bold tracking-widest">00:01:30.500 s</span>
+</div>
+</div>
+<!-- Right Trailing Controls & Mandatory JSON actions -->
+<div class="flex items-center gap-2">
+<!-- Scenario Selector -->
+<div class="hidden 2xl:flex items-center gap-1 bg-surface-container border border-outline-variant px-2 py-1 text-label-sm font-label-sm text-on-surface">
+<span class="material-symbols-outlined text-primary-container text-sm">satellite_alt</span>
+<span class="text-on-surface">LEO Optical Downlink Pass [700km Altitude]</span>
+<span class="material-symbols-outlined text-on-surface-variant text-xs">arrow_drop_down</span>
+</div>
+<!-- Laser Arm Secondary Action (from JSON) -->
+<button class="px-2.5 py-1 text-label-md font-label-md bg-tertiary-container/10 border border-tertiary-fixed-dim text-tertiary-fixed hover:bg-tertiary-container/30 transition-colors uppercase tracking-wider flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">tune</span>
+        LASER ARM
+      </button>
+<!-- Emergency Stop Critical Action (from JSON) -->
+<button class="px-2.5 py-1 text-label-md font-label-md caution-stripe border border-error text-error hover:text-white transition-all uppercase tracking-wider flex items-center gap-1 font-bold">
+<span class="material-symbols-outlined text-sm">emergency</span>
+        EMERGENCY STOP
+      </button>
+<!-- Trailing Icon Cluster from JSON -->
+<div class="flex items-center border-l border-outline-variant pl-2 gap-1 text-on-surface-variant">
+<button class="p-1 hover:text-primary transition-colors" title="Terminal Shell">
+<span class="material-symbols-outlined">terminal</span>
+</button>
+<button class="p-1 hover:text-primary transition-colors" title="Subsystem Settings">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</div>
+</div>
+</header>
+<!-- ========================================================================= -->
+<!-- 2. WORKSPACE NAVIGATION RIBBON & TELEMETRY SUB-STRIP                      -->
+<!-- ========================================================================= -->
+<nav class="flex items-center justify-between px-4 h-9 bg-surface-container-low border-b border-outline-variant select-none shrink-0 z-40">
+<div class="flex items-center gap-6 h-full">
+<!-- Active tab from prompt & JSON structure -->
+<button class="text-primary border-b-2 border-primary pb-0.5 font-semibold text-label-md font-label-md flex items-center gap-1.5 h-full">
+<span class="material-symbols-outlined text-sm">radar</span>
+        FLIGHT OPERATIONS (ACTIVE)
+      </button>
+<button class="text-on-surface-variant hover:text-on-surface pb-0.5 font-medium transition-colors text-label-md font-label-md flex items-center gap-1.5 h-full">
+<span class="material-symbols-outlined text-sm">adjust</span>
+        GIMBAL CONTROL LAB
+      </button>
+<button class="text-on-surface-variant hover:text-on-surface pb-0.5 font-medium transition-colors text-label-md font-label-md flex items-center gap-1.5 h-full">
+<span class="material-symbols-outlined text-sm">biotech</span>
+        OPTICS &amp; TURBULENCE
+      </button>
+<button class="text-on-surface-variant hover:text-on-surface pb-0.5 font-medium transition-colors text-label-md font-label-md flex items-center gap-1.5 h-full">
+<span class="material-symbols-outlined text-sm">query_stats</span>
+        METRICS &amp; DIAGNOSTICS
+      </button>
+<button class="text-on-surface-variant hover:text-on-surface pb-0.5 font-medium transition-colors text-label-md font-label-md flex items-center gap-1.5 h-full">
+<span class="material-symbols-outlined text-sm">history</span>
+        MISSION REPLAY &amp; EXPORT
+      </button>
+</div>
+<!-- Quick Telemetry Diagnostic Indicators -->
+<div class="hidden lg:flex items-center gap-4 text-label-sm font-label-sm">
+<div class="flex items-center gap-1.5">
+<span class="text-on-surface-variant">CARRIER BEACON:</span>
+<span class="text-secondary font-bold">ACQUIRED (1550nm)</span>
+</div>
+<div class="h-3 w-px bg-outline-variant"></div>
+<div class="flex items-center gap-1.5">
+<span class="text-on-surface-variant">TRACKER:</span>
+<span class="text-primary-container font-semibold">KALMAN EXTENDED (EKF)</span>
+</div>
+<div class="h-3 w-px bg-outline-variant"></div>
+<div class="flex items-center gap-1.5">
+<span class="text-on-surface-variant">GIMBAL HEALTH:</span>
+<span class="text-secondary font-semibold">NOMINAL (34.2°C)</span>
+</div>
+<div class="h-3 w-px bg-outline-variant"></div>
+<div class="flex items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-xs text-secondary">volume_up</span>
+<span>AUDIO CHIRP: ON</span>
+</div>
+</div>
+</nav>
+<!-- ========================================================================= -->
+<!-- MAIN WORKSPACE: SHELL CONTAINER WITH SIDEBAR AND CONTENT CANVAS          -->
+<!-- ========================================================================= -->
+<div class="flex-1 flex overflow-hidden">
+<!-- ======================================================================= -->
+<!-- COMPONENT: SideNavBar (MANDATED FROM JSON ANCHORS)                      -->
+<!-- ======================================================================= -->
+<aside class="flex flex-col justify-between h-full w-64 border-r border-outline-variant bg-surface-container-lowest p-2 select-none shrink-0">
+<!-- SideNav Header with Node Identity -->
+<div>
+<div class="p-2 border-b border-outline-variant mb-2">
+<div class="text-label-md font-label-md text-on-surface-variant uppercase tracking-widest">
+            NODE 04-ALPHA
+          </div>
+<div class="text-headline-sm font-headline-sm text-primary font-bold">
+            GROUND TERMINAL
+          </div>
+<div class="text-body-sm font-body-sm text-on-surface-variant">
+            OPTICAL CARRIER: 1550nm
+          </div>
+</div>
+<!-- Primary Mode CTA Button (JSON cta) -->
+<button class="w-full mb-3 py-1.5 px-3 bg-primary-container text-on-primary font-label-md text-label-md font-bold tracking-wider uppercase border border-primary hover:bg-surface-tint transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-sm">lock</span>
+          LOCK BEACON
+        </button>
+<!-- Navigation Tabs from JSON -->
+<div class="space-y-1">
+<!-- Active: LINK TRACKING -->
+<a class="bg-surface-container border-l-2 border-primary text-primary font-semibold px-3 py-2 flex items-center gap-3 text-label-sm font-label-sm" href="#">
+<span class="material-symbols-outlined text-primary text-base">radar</span>
+<span>LINK TRACKING</span>
+</a>
+<a class="text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface px-3 py-2 flex items-center gap-3 text-label-sm font-label-sm transition-colors" href="#">
+<span class="material-symbols-outlined text-base">adjust</span>
+<span>OPTICAL RADAR</span>
+</a>
+<a class="text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface px-3 py-2 flex items-center gap-3 text-label-sm font-label-sm transition-colors" href="#">
+<span class="material-symbols-outlined text-base">biotech</span>
+<span>CMOS DETECTOR</span>
+</a>
+<a class="text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface px-3 py-2 flex items-center gap-3 text-label-sm font-label-sm transition-colors" href="#">
+<span class="material-symbols-outlined text-base">tune</span>
+<span>PID SERVO DOCK</span>
+</a>
+<a class="text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface px-3 py-2 flex items-center gap-3 text-label-sm font-label-sm transition-colors" href="#">
+<span class="material-symbols-outlined text-base">query_stats</span>
+<span>SPECTRAL BER</span>
+</a>
+<a class="text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface px-3 py-2 flex items-center gap-3 text-label-sm font-label-sm transition-colors" href="#">
+<span class="material-symbols-outlined text-base">terminal</span>
+<span>EVENT CONSOLE</span>
+</a>
+</div>
+</div>
+<!-- SideNav Footer Subsystems (from JSON) -->
+<div class="pt-2 border-t border-outline-variant space-y-1">
+<a class="text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface px-3 py-1.5 flex items-center gap-3 text-label-sm font-label-sm transition-colors" href="#">
+<span class="material-symbols-outlined text-base">health_and_safety</span>
+<span>SUBSYSTEM HEALTH</span>
+</a>
+<a class="text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface px-3 py-1.5 flex items-center gap-3 text-label-sm font-label-sm transition-colors" href="#">
+<span class="material-symbols-outlined text-base">developer_board</span>
+<span>DIAGNOSTICS</span>
+</a>
+<div class="mt-2 p-2 bg-surface-container-low text-label-sm font-label-sm border border-outline-variant flex justify-between items-center text-on-surface-variant">
+<span>RTC-SYNC:</span>
+<span class="text-secondary font-mono">0.002 ms</span>
+</div>
+</div>
+</aside>
+<!-- ======================================================================= -->
+<!-- CONTENT CANVAS: BENTO GRID WITH DUAL VIEWPORTS, TELEMETRY & CONTROLS    -->
+<!-- ======================================================================= -->
+<main class="flex-1 flex flex-col overflow-y-auto custom-scrollbar bg-background p-2 gap-2">
+<!-- TOP STAGE: DUAL VIEWPORTS & RIGHT SUPERVISOR SIDEBAR (3-COLUMN BENTO) -->
+<div class="grid grid-cols-12 gap-2 shrink-0">
+<!-- VIEWPORT 1: 2D WORLD TARGETING RADAR INSTRUMENT (5 Cols) -->
+<section class="col-span-12 lg:col-span-5 bg-surface-container border border-outline-variant flex flex-col h-[380px] relative overflow-hidden">
+<!-- Enclosure Header -->
+<div class="flex justify-between items-center px-3 py-1.5 border-b border-outline-variant bg-surface-container-low shrink-0">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-container text-sm">radar</span>
+<h2 class="text-label-md font-label-md font-bold text-on-surface tracking-wider">2D WORLD TARGETING RADAR INSTRUMENT</h2>
+</div>
+<div class="flex items-center gap-2 text-label-sm font-label-sm text-primary">
+<span>RNG: 700.4 KM</span>
+<span class="h-2 w-px bg-outline-variant"></span>
+<span class="text-secondary">FOV: 60 mrad</span>
+</div>
+</div>
+<!-- Radar Instrument Visual Area -->
+<div class="flex-1 relative bg-surface-container-lowest flex items-center justify-center overflow-hidden reticle-grid">
+<!-- Perimeter Graduation Markings (-30 mrad to +30 mrad) -->
+<div class="absolute top-1 left-2 text-label-sm font-label-sm text-on-surface-variant">EL: +30 mrad</div>
+<div class="absolute bottom-1 left-2 text-label-sm font-label-sm text-on-surface-variant">EL: -30 mrad</div>
+<div class="absolute top-1 right-2 text-label-sm font-label-sm text-on-surface-variant">AZ: +30 mrad</div>
+<div class="absolute bottom-1 right-2 text-label-sm font-label-sm text-on-surface-variant">AZ: -30 mrad</div>
+<!-- SVG Radar Rings, Vectors & Covariance -->
+<svg class="w-full h-full absolute inset-0" viewbox="-120 -120 240 240">
+<!-- Concentric Rings (10 mrad, 20 mrad, 30 mrad) -->
+<circle cx="0" cy="0" fill="none" r="35" stroke="#334155" stroke-dasharray="2,2" stroke-width="1"></circle>
+<text fill="#64748B" font-family="JetBrains Mono" font-size="6" x="36" y="-4">10 mrad</text>
+<circle cx="0" cy="0" fill="none" r="70" stroke="#334155" stroke-dasharray="3,3" stroke-width="1"></circle>
+<text fill="#64748B" font-family="JetBrains Mono" font-size="6" x="71" y="-4">20 mrad</text>
+<circle cx="0" cy="0" fill="none" r="105" stroke="#334155" stroke-width="1"></circle>
+<text fill="#64748B" font-family="JetBrains Mono" font-size="6" x="85" y="-95">30 mrad</text>
+<!-- Central Crosshairs -->
+<line stroke="#1E293B" stroke-width="1" x1="-115" x2="115" y1="0" y2="0"></line>
+<line stroke="#1E293B" stroke-width="1" x1="0" x2="0" y1="-115" y2="115"></line>
+<!-- Optical Decoys / Background Stars -->
+<circle cx="-55" cy="-40" fill="#64748B" opacity="0.6" r="1.5"></circle>
+<text fill="#64748B" font-family="JetBrains Mono" font-size="4" x="-52" y="-42">STAR-771</text>
+<circle cx="65" cy="50" fill="#64748B" opacity="0.5" r="1.2"></circle>
+<circle cx="-20" cy="80" fill="#64748B" opacity="0.4" r="1.8"></circle>
+<!-- Active Gimbal Boresight Bracket -->
+<rect fill="rgba(0, 229, 255, 0.03)" height="50" stroke="#00E5FF" stroke-dasharray="6,4" stroke-width="0.8" width="50" x="-25" y="-25"></rect>
+<line stroke="#00E5FF" stroke-width="1.2" x1="-6" x2="6" y1="0" y2="0"></line>
+<line stroke="#00E5FF" stroke-width="1.2" x1="0" x2="0" y1="-6" y2="6"></line>
+<!-- Target Trajectory Path (Historical track) -->
+<polyline fill="none" opacity="0.4" points="-80,-60 -50,-35 -20,-10 15,12 28,22" stroke="#00E5FF" stroke-dasharray="2,2" stroke-width="1"></polyline>
+<!-- Predicted Velocity Vector & Target Reticle -->
+<!-- Target Point: AZ +04.281 mrad, EL -01.904 mrad (scaled to center) -->
+<g transform="translate(18, -10)">
+<!-- Covariance Ellipse -->
+<ellipse cx="0" cy="0" fill="rgba(0, 229, 255, 0.1)" rx="14" ry="8" stroke="#00E5FF" stroke-width="0.75" transform="rotate(35)"></ellipse>
+<!-- Velocity Vector Arrow (heading 042°) -->
+<line marker-end="url(#arrow)" stroke="#4edea3" stroke-width="1.5" x1="0" x2="26" y1="0" y2="-22"></line>
+<circle cx="0" cy="0" fill="#00E5FF" r="3"></circle>
+<circle class="animate-ping" cx="0" cy="0" fill="none" r="6" stroke="#00E5FF" stroke-width="1"></circle>
+<text fill="#4edea3" font-family="JetBrains Mono" font-size="5" font-weight="bold" x="8" y="-12">V: 7.2 mrad/s [042°]</text>
+<text fill="#00E5FF" font-family="JetBrains Mono" font-size="5" x="8" y="-5">SAT: LEO-FSOC-04</text>
+</g>
+<!-- Arrow Marker Definition -->
+<defs>
+<marker id="arrow" markerheight="4" markerwidth="4" orient="auto-start-reverse" refx="5" refy="5" viewbox="0 0 10 10">
+<path d="M 0 0 L 10 5 L 0 10 z" fill="#4edea3"></path>
+</marker>
+</defs>
+</svg>
+<!-- Bottom Floating HUD Banner -->
+<div class="absolute bottom-2 left-2 right-2 bg-surface-container-lowest/90 border border-outline-variant px-2.5 py-1 flex justify-between items-center text-label-sm font-label-sm backdrop-blur-xs">
+<span class="text-on-surface">AZ: <strong class="text-primary font-mono">+04.281 mrad</strong></span>
+<span class="text-outline-variant">|</span>
+<span class="text-on-surface">EL: <strong class="text-primary font-mono">-01.904 mrad</strong></span>
+<span class="text-outline-variant">|</span>
+<span class="text-on-surface">RESIDUAL: <strong class="text-secondary font-mono">0.14 mrad</strong></span>
+<span class="text-outline-variant">|</span>
+<span class="px-1.5 py-0.2 bg-secondary-container/20 text-secondary border border-secondary/40">IN BORESIGHT</span>
+</div>
+</div>
+</section>
+<!-- VIEWPORT 2: OPTICAL CMOS SENSOR DETECTOR STREAM (4 Cols) -->
+<section class="col-span-12 lg:col-span-4 bg-surface-container border border-outline-variant flex flex-col h-[380px] relative overflow-hidden">
+<!-- Enclosure Header -->
+<div class="flex justify-between items-center px-3 py-1.5 border-b border-outline-variant bg-surface-container-low shrink-0">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-sm">biotech</span>
+<h2 class="text-label-md font-label-md font-bold text-on-surface tracking-wider">OPTICAL CMOS SENSOR DETECTOR STREAM</h2>
+</div>
+<span class="px-1.5 py-0.5 bg-primary-container/10 border border-primary text-label-sm font-label-sm text-primary">
+              1024x1024 RAW16
+            </span>
+</div>
+<!-- CMOS Feed Simulation Area -->
+<div class="flex-1 relative bg-[#06080F] flex items-center justify-center overflow-hidden sensor-crosshair">
+<!-- Sensor Grid Lines -->
+<div class="absolute inset-0 reticle-grid opacity-30"></div>
+<!-- Thermal / Laser Spot Simulated Beam Profile -->
+<div class="relative w-36 h-36 rounded-full flex items-center justify-center">
+<div class="absolute inset-0 rounded-full bg-cyan-500/10 blur-xl"></div>
+<div class="absolute w-24 h-24 rounded-full bg-cyan-400/20 blur-md"></div>
+<div class="absolute w-12 h-12 rounded-full bg-primary-container/40 blur-sm"></div>
+<div class="w-4 h-4 rounded-full bg-white shadow-[0_0_15px_#00E5FF]"></div>
+<!-- High-precision Centroid Reticle Crosshairs -->
+<div class="absolute w-full h-px bg-primary-container/60"></div>
+<div class="absolute h-full w-px bg-primary-container/60"></div>
+<div class="absolute w-8 h-8 border border-primary-container/80"></div>
+<div class="absolute -top-4 text-label-sm font-label-sm text-primary-container">X: 512.44, Y: 508.19</div>
+</div>
+<!-- Top Left Real-time Metrics Overlay -->
+<div class="absolute top-2 left-2 space-y-1 text-label-sm font-label-sm bg-surface-container-lowest/80 border border-outline-variant p-2">
+<div class="text-on-surface-variant">PEAK COUNTS: <strong class="text-on-surface font-mono">61,420 DN</strong> (16-bit)</div>
+<div class="text-on-surface-variant">SPOT FWHM: <strong class="text-secondary font-mono">3.2 px</strong></div>
+<div class="text-on-surface-variant">AGC GAIN: <strong class="text-primary font-mono">14.2 dB</strong></div>
+<div class="text-on-surface-variant">SENSOR SNR: <strong class="text-secondary font-mono">28.6 dB</strong></div>
+</div>
+<!-- Overlays for Beam Power Density and Shutter -->
+<div class="absolute top-2 right-2 text-right space-y-1 text-label-sm font-label-sm bg-surface-container-lowest/80 border border-outline-variant p-2">
+<div class="text-on-surface-variant">BEAM DENSITY: <span class="text-primary font-mono">142.6 pW/cm²</span></div>
+<div class="text-on-surface-variant">SHUTTER: <span class="text-on-surface font-mono">1/2000s</span></div>
+<div class="text-secondary flex items-center justify-end gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+<span>SUB-APERTURE #2</span>
+</div>
+</div>
+<!-- Pseudo-Color Colormap Scale Bar (Bottom Right) -->
+<div class="absolute bottom-2 right-2 bg-surface-container-lowest/90 border border-outline-variant p-1.5 flex flex-col gap-1 w-32">
+<div class="flex justify-between text-label-sm font-label-sm text-on-surface-variant">
+<span>0 DN</span>
+<span>65535 DN</span>
+</div>
+<div class="h-2 w-full rounded-none bg-gradient-to-r from-blue-900 via-emerald-400 via-yellow-400 to-cyan-300 border border-outline-variant"></div>
+<span class="text-[8px] text-right font-mono text-outline">JET-PSEUDOCOLOR</span>
+</div>
+</div>
+</section>
+<!-- RIGHT TELEMETRY & SUPERVISOR SIDEBAR (3 Cols) -->
+<section class="col-span-12 lg:col-span-3 bg-surface-container border border-outline-variant flex flex-col h-[380px] p-2 justify-between">
+<!-- Tracker Filter Mode Switcher -->
+<div>
+<div class="flex justify-between items-center pb-1.5 border-b border-outline-variant mb-2">
+<span class="text-label-sm font-label-sm text-on-surface-variant">TRACKER ALGORITHM</span>
+<span class="text-label-sm font-label-sm text-secondary font-mono">LOOP 1000Hz</span>
+</div>
+<div class="grid grid-cols-3 gap-1">
+<button class="py-1 px-1 text-center bg-primary-container/20 border border-primary-container text-primary text-label-sm font-label-sm font-bold">
+                EKF (ACT)
+              </button>
+<button class="py-1 px-1 text-center bg-surface-container-high border border-outline-variant text-on-surface-variant hover:text-on-surface text-label-sm font-label-sm">
+                PARTICLE
+              </button>
+<button class="py-1 px-1 text-center bg-surface-container-high border border-outline-variant text-on-surface-variant hover:text-on-surface text-label-sm font-label-sm">
+                COAST
+              </button>
+</div>
+</div>
+<!-- Big FSM Supervisor State Block -->
+<div class="p-3 bg-surface-container-lowest border border-secondary hud-glow-green">
+<div class="text-label-sm font-label-sm text-on-surface-variant uppercase flex items-center justify-between">
+<span>SUPERVISOR FSM</span>
+<span class="material-symbols-outlined text-secondary text-sm">lock</span>
+</div>
+<div class="text-headline-sm font-headline-sm font-bold text-secondary tracking-wide mt-1">
+              STATE: CLOSED LOOP TRACKING
+            </div>
+<div class="text-body-sm font-body-sm text-on-surface-variant mt-1 flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
+<span>BEACON LOCKED &amp; CENTROIDED</span>
+</div>
+</div>
+<!-- Lock Retention Radial / Circular Gauge Representation -->
+<div class="p-2.5 bg-surface-container-low border border-outline-variant flex items-center justify-between">
+<div>
+<div class="text-label-sm font-label-sm text-on-surface-variant">LOCK RETENTION RATE</div>
+<div class="text-headline-lg font-headline-lg font-bold text-primary font-mono mt-0.5">99.4%</div>
+<div class="text-label-sm font-label-sm text-secondary">TARGET &gt;98.5% NOMINAL</div>
+</div>
+<div class="w-12 h-12 rounded-full border-2 border-secondary border-t-primary flex items-center justify-center text-label-sm font-label-sm font-mono text-secondary">
+              99.4
+            </div>
+</div>
+<!-- Pointing Error Bar Indicator with Green/Yellow/Red Zones -->
+<div class="p-2 bg-surface-container-low border border-outline-variant space-y-1.5">
+<div class="flex justify-between items-center text-label-sm font-label-sm">
+<span class="text-on-surface-variant">POINTING ERROR RESIDUAL</span>
+<span class="text-primary font-mono font-bold">0.42 mrad</span>
+</div>
+<!-- Error Range Bar -->
+<div class="w-full h-3 bg-surface-container-lowest border border-outline-variant relative">
+<!-- Threshold marker at 2.0 mrad (scaled: 66%) -->
+<div class="absolute top-0 bottom-0 left-[66%] w-0.5 bg-error z-10" title="2.0 mrad Threshold"></div>
+<!-- Safe green zone fill (0.42 mrad = ~14%) -->
+<div class="h-full bg-secondary w-[14%] transition-all duration-300"></div>
+</div>
+<div class="flex justify-between text-[8px] font-mono text-outline">
+<span class="text-secondary">0.0 (OPTICAL AXIS)</span>
+<span class="text-tertiary-fixed-dim">1.0 mrad</span>
+<span class="text-error font-bold">2.0 mrad SPEC MAX</span>
+</div>
+</div>
+<!-- Gimbal Actuator Telemetry -->
+<div class="p-2 bg-surface-container-lowest border border-outline-variant text-label-sm font-label-sm space-y-1">
+<div class="flex justify-between text-on-surface-variant">
+<span>AZ MOTOR TORQUE:</span>
+<span class="text-on-surface font-mono">41.2% [2.1 Nm]</span>
+</div>
+<div class="flex justify-between text-on-surface-variant">
+<span>EL MOTOR TORQUE:</span>
+<span class="text-on-surface font-mono">28.7% [1.4 Nm]</span>
+</div>
+<div class="flex justify-between text-on-surface-variant">
+<span>ENCODER RESOLUTION:</span>
+<span class="text-primary font-mono">24-bit Absolute</span>
+</div>
+</div>
+</section>
+</div>
+<!-- LOWER SECTION: OSCILLOSCOPE, EVENT CONSOLE & HARDWARE PID DOCK -->
+<div class="grid grid-cols-12 gap-2 shrink-0">
+<!-- OSCILLOSCOPE 4-CHANNEL DISPLAY (5 Cols) -->
+<section class="col-span-12 lg:col-span-5 bg-surface-container border border-outline-variant flex flex-col h-64">
+<div class="flex justify-between items-center px-3 py-1.5 border-b border-outline-variant bg-surface-container-low shrink-0">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm">show_chart</span>
+<h2 class="text-label-md font-label-md font-bold text-on-surface">REAL-TIME TELEMETRY OSCILLOSCOPE (4-CHANNEL)</h2>
+</div>
+<!-- Range Selector -->
+<div class="flex items-center gap-1 text-label-sm font-label-sm">
+<span class="px-1.5 py-0.5 bg-surface-variant text-on-surface-variant">10s</span>
+<span class="px-1.5 py-0.5 bg-primary-container text-on-primary font-bold">30s</span>
+<span class="px-1.5 py-0.5 bg-surface-variant text-on-surface-variant">60s</span>
+<span class="px-1.5 py-0.5 bg-surface-variant text-on-surface-variant">ALL</span>
+</div>
+</div>
+<!-- Waveform Canvas Screen Area -->
+<div class="flex-1 bg-surface-container-lowest p-2 relative overflow-hidden flex flex-col justify-between">
+<!-- Grid Lines overlay -->
+<div class="absolute inset-0 reticle-grid opacity-20 pointer-events-none"></div>
+<!-- Waveform Render SVG -->
+<svg class="w-full h-36" preserveaspectratio="none" viewbox="0 0 400 120">
+<!-- Threshold Line 2.0 mrad (Red Dotted) -->
+<line stroke="#ffb4ab" stroke-dasharray="4,4" stroke-width="1" x1="0" x2="400" y1="35" y2="35"></line>
+<text fill="#ffb4ab" font-family="JetBrains Mono" font-size="7" x="310" y="32">SPEC LIMIT 2.0 mrad</text>
+<!-- Zero Baseline -->
+<line stroke="#334155" stroke-width="1" x1="0" x2="400" y1="100" y2="100"></line>
+<!-- Ch1: Pointing Error Curve (Cyan) -->
+<path d="M 0,70 Q 30,65 60,78 T 120,62 T 180,75 T 240,60 T 300,68 T 360,58 T 400,62" fill="none" stroke="#00E5FF" stroke-width="1.8"></path>
+<!-- Ch2: Tracker Confidence % (Emerald - Steady high) -->
+<path d="M 0,20 Q 50,22 100,19 T 200,21 T 300,18 T 400,20" fill="none" stroke="#4edea3" stroke-width="1.5"></path>
+<!-- Ch3: Atmospheric Turbulence Fried r0 Index (Amber) -->
+<path d="M 0,90 Q 40,95 80,85 T 160,105 T 240,92 T 320,100 T 400,88" fill="none" stroke="#ffb95f" stroke-dasharray="3,1" stroke-width="1.2"></path>
+</svg>
+<!-- Channel Legend Toggles -->
+<div class="flex items-center justify-between border-t border-outline-variant pt-1.5 text-label-sm font-label-sm">
+<div class="flex items-center gap-3">
+<span class="text-primary flex items-center gap-1 cursor-pointer">
+<span class="w-2 h-2 rounded-full bg-primary-container"></span>
+                  Ch1: Pointing Error (0.42 mrad)
+                </span>
+<span class="text-secondary flex items-center gap-1 cursor-pointer">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+                  Ch2: Confidence (98.4%)
+                </span>
+<span class="text-tertiary-fixed-dim flex items-center gap-1 cursor-pointer">
+<span class="w-2 h-2 rounded-full bg-tertiary-fixed-dim"></span>
+                  Ch3: Fried r0 (8.5cm)
+                </span>
+</div>
+<span class="text-on-surface-variant font-mono text-[9px]">T-30.0s to T-0.0s</span>
+</div>
+</div>
+</section>
+<!-- TERMINAL EVENT STREAM & FSM LOGS (4 Cols) -->
+<section class="col-span-12 lg:col-span-4 bg-surface-container border border-outline-variant flex flex-col h-64">
+<div class="flex justify-between items-center px-3 py-1.5 border-b border-outline-variant bg-surface-container-low shrink-0">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-sm">terminal</span>
+<h2 class="text-label-md font-label-md font-bold text-on-surface">TERMINAL EVENT STREAM &amp; FSM LOGS</h2>
+</div>
+<!-- Filter chips -->
+<div class="flex items-center gap-1 text-[8px] font-mono">
+<span class="px-1 bg-surface-variant text-primary font-bold cursor-pointer">[ALL]</span>
+<span class="px-1 bg-surface-container text-on-surface-variant cursor-pointer">[CRIT]</span>
+<span class="px-1 bg-surface-container text-on-surface-variant cursor-pointer">[FSM]</span>
+<span class="px-1 bg-surface-container text-on-surface-variant cursor-pointer">[SENSORS]</span>
+</div>
+</div>
+<!-- Log Content Area -->
+<div class="flex-1 bg-surface-container-lowest p-2 overflow-y-auto custom-scrollbar font-mono text-[10px] space-y-1.5 leading-relaxed">
+<div class="flex items-start gap-1.5 text-on-surface">
+<span class="text-outline shrink-0">00:01:30.412</span>
+<span class="px-1 bg-secondary-container/20 text-secondary border border-secondary/30 shrink-0 font-bold">[LOCK]</span>
+<span class="text-on-surface">Carrier beacon stabilized on CMOS sub-aperture #2.</span>
+</div>
+<div class="flex items-start gap-1.5 text-on-surface">
+<span class="text-outline shrink-0">00:01:29.890</span>
+<span class="px-1 bg-primary-container/20 text-primary-container border border-primary-container/30 shrink-0 font-bold">[MODE]</span>
+<span class="text-on-surface">Transition: OPEN_LOOP_ACQUISITION -&gt; CLOSED_LOOP_TRACKING.</span>
+</div>
+<div class="flex items-start gap-1.5 text-on-surface">
+<span class="text-outline shrink-0">00:01:28.104</span>
+<span class="px-1 bg-tertiary-container/20 text-tertiary-fixed-dim border border-tertiary-container/30 shrink-0 font-bold">[PID]</span>
+<span class="text-on-surface">Auto-tuned feedforward gain Kff to 1.14 on Azimuth axis.</span>
+</div>
+<div class="flex items-start gap-1.5 text-on-surface">
+<span class="text-outline shrink-0">00:01:26.550</span>
+<span class="px-1 bg-secondary-container/20 text-secondary border border-secondary/30 shrink-0 font-bold">[REACQ]</span>
+<span class="text-on-surface">Spot centroid recovered after micro-scintillation fade (SNR 12.1 -&gt; 28.4 dB).</span>
+</div>
+<div class="flex items-start gap-1.5 text-on-surface">
+<span class="text-outline shrink-0">00:01:24.002</span>
+<span class="px-1 bg-surface-variant text-on-surface-variant border border-outline-variant shrink-0 font-bold">[GIMBAL]</span>
+<span class="text-on-surface">Slew rate normalized to 0.42 rad/s. Track convergence &lt;0.5mrad.</span>
+</div>
+<div class="flex items-start gap-1.5 text-on-surface">
+<span class="text-outline shrink-0">00:01:21.310</span>
+<span class="px-1 bg-primary-container/20 text-primary-container border border-primary-container/30 shrink-0 font-bold">[OPTICS]</span>
+<span class="text-on-surface">Piezo Fast Steering Mirror (FSM) zero-point calibrated.</span>
+</div>
+</div>
+<!-- Bottom Live Status Line -->
+<div class="px-2 py-1 bg-surface-container-low border-t border-outline-variant flex justify-between items-center text-label-sm font-label-sm text-outline">
+<span class="flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary animate-ping"></span>
+              LIVE AUTO-SCROLL ACTIVE
+            </span>
+<span>6/120 EVENTS</span>
+</div>
+</section>
+<!-- HARDWARE PID GAIN CALIBRATION & OPTICS DOCK (3 Cols) -->
+<section class="col-span-12 lg:col-span-3 bg-surface-container border border-outline-variant flex flex-col h-64 justify-between p-2">
+<div>
+<div class="flex justify-between items-center pb-1.5 border-b border-outline-variant mb-2">
+<div class="flex items-center gap-1 text-label-md font-label-md font-bold text-on-surface">
+<span class="material-symbols-outlined text-sm text-primary">tune</span>
+<span>PID GAIN &amp; OPTICS DOCK</span>
+</div>
+<span class="text-[9px] font-mono text-secondary">SERVO AUTO</span>
+</div>
+<!-- Stepper Grid Controls -->
+<div class="grid grid-cols-2 gap-2 text-label-sm font-label-sm">
+<!-- Kp Stepper -->
+<div class="bg-surface-container-low border border-outline-variant p-1">
+<div class="flex justify-between text-outline">
+<span>Kp (PROP)</span>
+<span class="text-primary font-mono">42.50</span>
+</div>
+<div class="flex gap-1 mt-1">
+<button class="flex-1 bg-surface-variant hover:bg-surface-bright text-center text-on-surface">-</button>
+<button class="flex-1 bg-surface-variant hover:bg-surface-bright text-center text-on-surface">+</button>
+</div>
+</div>
+<!-- Ki Stepper -->
+<div class="bg-surface-container-low border border-outline-variant p-1">
+<div class="flex justify-between text-outline">
+<span>Ki (INT)</span>
+<span class="text-primary font-mono">0.85</span>
+</div>
+<div class="flex gap-1 mt-1">
+<button class="flex-1 bg-surface-variant hover:bg-surface-bright text-center text-on-surface">-</button>
+<button class="flex-1 bg-surface-variant hover:bg-surface-bright text-center text-on-surface">+</button>
+</div>
+</div>
+<!-- Kd Stepper -->
+<div class="bg-surface-container-low border border-outline-variant p-1">
+<div class="flex justify-between text-outline">
+<span>Kd (DERIV)</span>
+<span class="text-primary font-mono">12.30</span>
+</div>
+<div class="flex gap-1 mt-1">
+<button class="flex-1 bg-surface-variant hover:bg-surface-bright text-center text-on-surface">-</button>
+<button class="flex-1 bg-surface-variant hover:bg-surface-bright text-center text-on-surface">+</button>
+</div>
+</div>
+<!-- Kff Stepper -->
+<div class="bg-surface-container-low border border-outline-variant p-1">
+<div class="flex justify-between text-outline">
+<span>Kff (FEEDFWD)</span>
+<span class="text-primary font-mono">1.14</span>
+</div>
+<div class="flex gap-1 mt-1">
+<button class="flex-1 bg-surface-variant hover:bg-surface-bright text-center text-on-surface">-</button>
+<button class="flex-1 bg-surface-variant hover:bg-surface-bright text-center text-on-surface">+</button>
+</div>
+</div>
+</div>
+<!-- Atmospheric Turbulence Parameter -->
+<div class="mt-2 bg-surface-container-low border border-outline-variant p-1.5 text-label-sm font-label-sm">
+<div class="flex justify-between text-on-surface-variant">
+<span>ATMOS TURBULENCE (Fried r0):</span>
+<span class="text-tertiary-fixed-dim font-mono font-bold">8.5 cm</span>
+</div>
+<div class="w-full bg-surface-container-lowest h-1.5 mt-1">
+<div class="bg-tertiary-fixed-dim h-full w-[42%]"></div>
+</div>
+<div class="text-[8px] text-outline mt-0.5">MODERATE TROPOSPHERIC SCINTILLATION</div>
+</div>
+</div>
+<!-- Preset Selection Buttons -->
+<div class="border-t border-outline-variant pt-2">
+<div class="grid grid-cols-4 gap-1 text-[8px] font-mono text-center">
+<button class="py-1 bg-surface-container-high border border-outline-variant hover:border-primary text-on-surface-variant hover:text-primary">
+                URBAN
+              </button>
+<button class="py-1 bg-surface-container-high border border-outline-variant hover:border-primary text-on-surface-variant hover:text-primary">
+                HI-ALT
+              </button>
+<button class="py-1 bg-surface-container-high border border-outline-variant hover:border-primary text-on-surface-variant hover:text-primary">
+                STORM
+              </button>
+<button class="py-1 bg-surface-variant border border-outline-variant text-on-surface hover:text-error">
+                RESET
+              </button>
+</div>
+</div>
+</section>
+</div>
+</main>
+</div>
+<!-- ========================================================================= -->
+<!-- 6. BOTTOM TRANSPORT OPERATIONS BAR (FULL-WIDTH WORKSTATION FOOTER)        -->
+<!-- ========================================================================= -->
+<footer class="h-12 bg-surface-container-lowest border-t border-outline-variant px-4 flex items-center justify-between select-none shrink-0 z-50">
+<!-- Playback Transport Cluster -->
+<div class="flex items-center gap-2">
+<!-- Play/Pause Controls -->
+<div class="flex items-center border border-outline-variant bg-surface-container-low">
+<button class="p-1.5 hover:bg-surface-variant text-on-surface-variant hover:text-on-surface" title="Step Back Frame">
+<span class="material-symbols-outlined text-sm">skip_previous</span>
+</button>
+<button class="p-1.5 bg-secondary-container/20 text-secondary border-x border-outline-variant hover:bg-secondary-container/40 hud-glow-green" title="Play Simulation">
+<span class="material-symbols-outlined text-base">play_arrow</span>
+</button>
+<button class="p-1.5 hover:bg-surface-variant text-on-surface-variant hover:text-on-surface" title="Pause Simulation">
+<span class="material-symbols-outlined text-sm">pause</span>
+</button>
+<button class="p-1.5 hover:bg-surface-variant text-on-surface-variant hover:text-on-surface border-r border-outline-variant" title="Step Forward Frame">
+<span class="material-symbols-outlined text-sm">skip_next</span>
+</button>
+<button class="p-1.5 hover:bg-surface-variant text-error" title="Reset Simulation">
+<span class="material-symbols-outlined text-sm">restart_alt</span>
+</button>
+</div>
+<!-- Playback Speed Multipliers -->
+<div class="hidden sm:flex items-center gap-0.5 border border-outline-variant bg-surface-container-low text-label-sm font-label-sm p-0.5">
+<button class="px-1.5 py-0.5 text-on-surface-variant hover:text-on-surface">0.25x</button>
+<button class="px-1.5 py-0.5 text-on-surface-variant hover:text-on-surface">0.5x</button>
+<button class="px-1.5 py-0.5 bg-primary-container text-on-primary font-bold">1.0x</button>
+<button class="px-1.5 py-0.5 text-on-surface-variant hover:text-on-surface">2.0x</button>
+<button class="px-1.5 py-0.5 text-on-surface-variant hover:text-on-surface">5.0x</button>
+</div>
+</div>
+<!-- Central Scrubbing Timeline Bar -->
+<div class="flex-1 max-w-2xl mx-6 flex items-center gap-3">
+<span class="text-label-sm font-label-sm font-mono text-primary">00:01:30.500</span>
+<div class="flex-1 h-3 bg-surface-container-low border border-outline-variant relative cursor-pointer group">
+<!-- Buffered Track -->
+<div class="absolute top-0 bottom-0 left-0 w-[70%] bg-surface-variant opacity-60"></div>
+<!-- Active Progress Head at 45% -->
+<div class="absolute top-0 bottom-0 left-0 w-[45%] bg-primary-container hud-glow"></div>
+<!-- Timeline Marker Point -->
+<div class="absolute top-[-3px] bottom-[-3px] left-[45%] w-1.5 bg-white shadow-[0_0_8px_#00E5FF]"></div>
+</div>
+<span class="text-label-sm font-label-sm font-mono text-on-surface-variant">00:03:20.000</span>
+</div>
+<!-- Quick Action Export Buttons -->
+<div class="flex items-center gap-2">
+<button class="hidden md:flex items-center gap-1 px-2 py-1 bg-surface-container border border-outline-variant text-label-sm font-label-sm text-on-surface-variant hover:text-primary hover:border-primary transition-colors">
+<span class="material-symbols-outlined text-xs">table_chart</span>
+<span>CSV</span>
+</button>
+<button class="hidden md:flex items-center gap-1 px-2 py-1 bg-surface-container border border-outline-variant text-label-sm font-label-sm text-on-surface-variant hover:text-primary hover:border-primary transition-colors">
+<span class="material-symbols-outlined text-xs">data_object</span>
+<span>JSON</span>
+</button>
+<button class="hidden sm:flex items-center gap-1 px-2 py-1 bg-surface-container border border-outline-variant text-label-sm font-label-sm text-on-surface hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-xs">photo_camera</span>
+<span>SNAPSHOT</span>
+</button>
+<button class="px-2.5 py-1 bg-primary text-on-primary font-bold text-label-sm font-label-sm uppercase tracking-wider hover:bg-primary-fixed-dim transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-xs font-bold">description</span>
+<span>GENERATE SIH REPORT</span>
+</button>
+</div>
+</footer>
+</body></html>

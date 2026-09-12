@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DRISHTI-PAT MK-IV | Optical Communication Ground Station Telemetry</title>
+  <meta name="description" content="ISRO / DOS PS-26169 Free Space Optical Communication Coarse Pointing, Acquisition, and Tracking Ground Station Console." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%23090d15' stroke='%2338bdf8' stroke-width='2'/><circle cx='16' cy='16' r='5' fill='%2322c55e'/><line x1='16' y1='2' x2='16' y2='30' stroke='%2338bdf8' stroke-width='1.5'/><line x1='2' y1='16' x2='30' y2='16' stroke='%2338bdf8' stroke-width='1.5'/></svg>" />
+  <link rel="stylesheet" href="style.css?v=2.3" />
+</head>
+<body>
+  <div class="ground-station-console">
+    <!-- ====================================================================
+         1. TOP MISSION COMMAND HEADER
+         ==================================================================== -->
+    <header class="station-header">
+      <div class="header-left">
+        <div class="mission-ident">
+          <span class="station-callsign">DRISHTI-PAT <span class="version-tag">MK-IV</span></span>
+          <span class="mission-sub">ISRO / DOS PS-26169 · FSOC PAT GROUND TERMINAL</span>
+        </div>
+      </div>
+
+      <!-- Compact Technical Status Array -->
+      <div class="header-telemetry-strip">
+        <div class="telemetry-item">
+          <span class="t-label">SYS STATUS</span>
+          <span class="t-val status-online" id="sys-status-val">ONLINE</span>
+        </div>
+        <div class="t-divider"></div>
+        <div class="telemetry-item">
+          <span class="t-label">STREAM</span>
+          <span class="t-val mono" id="stream-fps">30.0</span>
+          <span class="t-unit">FPS</span>
+        </div>
+        <div class="t-divider"></div>
+        <div class="telemetry-item">
+          <span class="t-label">LOOP TIME</span>
+          <span class="t-val mono" id="algo-latency">18.2</span>
+          <span class="t-unit">ms</span>
+        </div>
+        <div class="t-divider"></div>
+        <div class="telemetry-item">
+          <span class="t-label">FRAME</span>
+          <span class="t-val mono highlight" id="frame-counter">0 / 100</span>
+        </div>
+        <div class="t-divider"></div>
+        <div class="telemetry-item">
+          <span class="t-label">SIM CLOCK</span>
+          <span class="t-val mono" id="sim-time">0.000</span>
+          <span class="t-unit">s</span>
+        </div>
+      </div>
+
+      <!-- Quick Header Actions -->
+      <div class="header-right">
+        <button class="tool-btn video-bench-btn" id="btn-open-video-modal" title="Upload Video or Select Optical Video Benchmark">
+          <span class="btn-icon">📁</span> LOAD VIDEO
+        </button>
+        <button class="tool-btn" id="btn-sound-toggle" title="Toggle Synthesized Audio Telemetry">
+          <span class="btn-dot"></span> AUD: ON
+        </button>
+        <div class="scenario-selector-wrap">
+          <span class="selector-tag">SCENARIO:</span>
+          <select id="scenario-select" class="station-select" aria-label="Select Demo Scenario">
+            <option value="" disabled selected>Loading scenarios...</option>
+          </select>
+        </div>
+      </div>
+    </header>
+
+    <!-- ====================================================================
+         2. SUBSYSTEM WORKSPACE NAVIGATION
+         ==================================================================== -->
+    <nav class="subsystem-nav-bar">
+      <div class="nav-tabs-group">
+        <button class="master-tab active" data-panel="flight-ops">
+          <span class="tab-index">01</span> PRIMARY TRACKING & TELEMETRY
+        </button>
+        <button class="master-tab" data-panel="hardware-control">
+          <span class="tab-index">02</span> GIMBAL & SERVO CONTROLS
+        </button>
+        <button class="master-tab" data-panel="target-optics">
+          <span class="tab-index">03</span> MULTI-TARGET & OPTICS LAB
+        </button>
+        <button class="master-tab" data-panel="performance-metrics">
+          <span class="tab-index">04</span> PERFORMANCE VERIFICATION
+        </button>
+      </div>
+      <div class="nav-annotation">
+        <span>FSOC CLOSED-LOOP COARSE PAT ENGINE · REAL-TIME INSTRUMENTATION</span>
+      </div>
+    </nav>
+
+    <!-- ====================================================================
+         3. MAIN WORKSPACE CONTAINER
+         ==================================================================== -->
+    <main class="console-body">
+      <!-- ------------------------------------------------------------------
+           PANEL 1: PRIMARY TRACKING & TELEMETRY
+           ------------------------------------------------------------------ -->
+      <div class="workspace-panel active" id="panel-flight-ops">
+        <div class="flight-ops-layout">
+          <!-- Left Column: Primary Instruments (Hero Tracking Visualizer + Oscilloscope) -->
+          <section class="instrument-column">
+            <!-- Hero Optical Tracking & Sensor Monitors -->
+            <div class="hero-instrument-surface">
+              <!-- Visualizer Toolbar -->
+              <div class="instrument-toolbar">
+                <div class="view-mode-tabs">
+                  <button class="view-tab active" id="tab-both-btn" data-view="both">DUAL COCKPIT</button>
+                  <button class="view-tab" id="tab-radar-btn" data-view="radar">2D TRACKING RADAR</button>
+                  <button class="view-tab" id="tab-camera-btn" data-view="camera">OPTICAL SENSOR FEED</button>
+                </div>
+                <div class="toolbar-right">
+                  <div class="palette-control">
+                    <span class="ctrl-label">CMOS PALETTE:</span>
+                    <select id="colormap-select" class="station-select-sm">
+                      <option value="turbo" selected>Turbo Thermal</option>
+                      <option value="inferno">Inferno IR</option>
+                      <option value="viridis">Viridis Spectral</option>
+                      <option value="green">Phosphor Night</option>
+                      <option value="grayscale">Raw Grayscale</option>
+                    </select>
+                  </div>
+                  <button class="tool-btn-sm" id="radar-reset-btn" title="Re-center Tracking Origin">⌖ RE-CENTER</button>
+                </div>
+              </div>
+
+              <!-- Main Displays Container -->
+              <div class="visual-viewport-grid" id="displays-container">
+                <!-- 1. 2D World Space Radar & FOV Instrument -->
+                <div class="viewport-card radar-card" id="radar-card">
+                  <div class="viewport-header">
+                    <div class="v-title">
+                      <span class="v-indicator"></span>
+                      <span>2D ANGULAR FIELD & GIMBAL FOV</span>
+                    </div>
+                    <div class="v-readout mono" id="radar-coords">
+                      PAN: 0.00 mrad | TILT: 0.00 mrad
+                    </div>
+                  </div>
+                  <div class="canvas-viewport">
+                    <canvas id="radar-canvas" width="700" height="440"></canvas>
+                    <!-- Technical Overlay Legend -->
+                    <div class="technical-legend">
+                      <div class="legend-cell"><span class="marker pri-marker"></span> PRIMARY BEACON</div>
+                      <div class="legend-cell"><span class="marker sec-marker"></span> SECONDARY / CLUTTER</div>
+                      <div class="legend-cell"><span class="marker pf-marker"></span> PF DISPERSION</div>
+                      <div class="legend-cell"><span class="marker fov-marker"></span> GIMBAL FOV BOUND</div>
+                      <div class="legend-cell"><span class="marker reticle-marker"></span> BORESIGHT RETICLE</div>
+                      <div class="legend-cell"><span class="marker reacq-marker"></span> TIER-1 SEARCH ZONE</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 2. Optical Sensor Monitor (CMOS Camera) -->
+                <div class="viewport-card camera-card" id="camera-card">
+                  <div class="viewport-header">
+                    <div class="v-title">
+                      <span class="v-indicator amber" id="cam-indicator"></span>
+                      <span id="camera-title-text">CMOS OPTICAL SENSOR (640×480)</span>
+                    </div>
+                    <div class="v-readout mono" id="camera-snr">
+                      CONF: 0.00 | GAIN: 1.00x
+                    </div>
+                  </div>
+                  <div class="camera-viewport">
+                    <img id="camera-frame-img" src="" alt="Optical Sensor Frame" class="sensor-feed-img" />
+                    <!-- Sensor Monitor HUD Reticles -->
+                    <div class="sensor-monitor-overlay">
+                      <div class="focal-bracket top-l"></div>
+                      <div class="focal-bracket top-r"></div>
+                      <div class="focal-bracket bot-l"></div>
+                      <div class="focal-bracket bot-r"></div>
+                      <div class="sensor-meta-stamp mono">
+                        <div id="cam-peak-counts">PEAK: 220 cts</div>
+                        <div id="cam-spot-pos">SPOT: (0.0, 0.0) px</div>
+                        <div id="cam-gain-stat">AGC GAIN: 1.00x</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Integrated Oscilloscope Surface -->
+            <div class="oscilloscope-surface">
+              <div class="scope-header">
+                <div class="scope-title">
+                  <span class="v-indicator blue"></span>
+                  <span>CLOSED-LOOP OSCILLOSCOPE</span>
+                </div>
+                <div class="scope-legend mono">
+                  <span class="key-item"><span class="k-dash cyan"></span> ERR: <strong id="scope-ch1-val">0.000</strong> mrad</span>
+                  <span class="key-item"><span class="k-dash green"></span> CONF: <strong id="scope-ch2-val">0%</strong></span>
+                  <span class="key-item"><span class="k-dash amber"></span> SEV: <strong id="scope-ch3-val">0%</strong></span>
+                </div>
+              </div>
+              <div class="scope-plot-area">
+                <canvas id="telemetry-chart-canvas" width="1000" height="110"></canvas>
+              </div>
+            </div>
+          </section>
+
+          <!-- Right Column: Structured Telemetry & Diagnostics Column -->
+          <aside class="telemetry-sidebar">
+            <!-- Telemetry Instrument Panel -->
+            <div class="station-panel">
+              <div class="panel-cap">
+                <span class="cap-title">PAT FLIGHT TELEMETRY</span>
+                <span class="fsm-status-badge" id="fsm-badge">TRACKING</span>
+              </div>
+
+              <!-- Primary Status Readouts -->
+              <div class="telemetry-primary-grid">
+                <!-- Estimator Mode Instrument -->
+                <div class="instrument-box" id="tracker-mode-card">
+                  <span class="inst-label">ESTIMATOR MODE</span>
+                  <div class="inst-val-row">
+                    <span class="mode-indicator mono" id="tracker-mode-val">KF</span>
+                  </div>
+                  <span class="inst-sub" id="tracker-mode-sub">Kalman Filter (Nominal)</span>
+                </div>
+
+                <!-- Lock Retention Instrument -->
+                <div class="instrument-box">
+                  <span class="inst-label">LOCK RETENTION</span>
+                  <div class="inst-val-row">
+                    <span class="retention-val mono" id="lock-retention-val">100.0%</span>
+                  </div>
+                  <span class="inst-sub status-locked" id="lock-state-sub">BORESIGHT LOCKED</span>
+                </div>
+              </div>
+
+              <!-- Precision Scientific Metrics Array -->
+              <div class="scientific-metrics-stack">
+                <!-- Tracking Error mrad -->
+                <div class="scientific-metric-row">
+                  <div class="metric-meta">
+                    <span class="sm-label">TRACKING ERROR (RADIAL)</span>
+                    <div class="sm-val-group mono">
+                      <span class="sm-number" id="err-mrad-val">0.000</span>
+                      <span class="sm-unit">mrad</span>
+                    </div>
+                  </div>
+                  <div class="technical-meter">
+                    <div class="meter-fill" id="err-mrad-bar" style="width: 10%;"></div>
+                  </div>
+                </div>
+
+                <!-- Pixel Deviation -->
+                <div class="scientific-metric-row">
+                  <div class="metric-meta">
+                    <span class="sm-label">FOCAL DEVIATION</span>
+                    <div class="sm-val-group mono">
+                      <span class="sm-number" id="err-px-val">0.0</span>
+                      <span class="sm-unit">px</span>
+                    </div>
+                  </div>
+                  <div class="technical-meter">
+                    <div class="meter-fill" id="err-px-bar" style="width: 15%;"></div>
+                  </div>
+                </div>
+
+                <!-- Detection Confidence -->
+                <div class="scientific-metric-row">
+                  <div class="metric-meta">
+                    <span class="sm-label">DETECTION CONFIDENCE</span>
+                    <div class="sm-val-group mono">
+                      <span class="sm-number" id="confidence-val">0.95</span>
+                      <span class="sm-unit">SNR</span>
+                    </div>
+                  </div>
+                  <div class="technical-meter">
+                    <div class="meter-fill green" id="conf-bar" style="width: 95%;"></div>
+                    <div class="threshold-pip" style="left: 40%;" title="0.40 Confidence Gate"></div>
+                  </div>
+                </div>
+
+                <!-- Atmospheric Severity -->
+                <div class="scientific-metric-row">
+                  <div class="metric-meta">
+                    <span class="sm-label">TURBULENCE SEVERITY</span>
+                    <div class="sm-val-group mono">
+                      <span class="sm-number" id="severity-val">0.12</span>
+                      <span class="sm-unit">S_atm</span>
+                    </div>
+                  </div>
+                  <div class="technical-meter">
+                    <div class="meter-fill amber" id="sev-bar" style="width: 12%;"></div>
+                    <div class="threshold-pip red" style="left: 55%;" title="0.55 Switch Boundary"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Optical Diagnostics Micro-Grid -->
+              <div class="diagnostics-micro-grid">
+                <div class="diag-card">
+                  <span class="d-label">REACQ TIER</span>
+                  <span class="d-val mono" id="reacq-tier-val">INACTIVE</span>
+                </div>
+                <div class="diag-card">
+                  <span class="d-label">FRIED r₀</span>
+                  <span class="d-val mono" id="fried-r0-val">24.5 mm</span>
+                </div>
+                <div class="diag-card">
+                  <span class="d-label">ACQ TIME</span>
+                  <span class="d-val mono" id="acq-time-val">0.495 s</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Engineering Disturbance Control Panel -->
+            <div class="station-panel">
+              <div class="panel-cap">
+                <span class="cap-title">DISTURBANCE INJECTION</span>
+                <button class="action-btn-danger" id="btn-inject-occ">⚡ INJECT OCCLUDER</button>
+              </div>
+
+              <div class="engineering-controls-stack">
+                <!-- Atmospheric Turbulence Cn2 -->
+                <div class="control-row">
+                  <div class="control-meta">
+                    <span class="c-title">Kolmogorov Turbulence (Cₙ²)</span>
+                    <span class="c-val mono" id="cn2-disp">1.0e-14</span>
+                  </div>
+                  <input type="range" id="slider-cn2" min="-16" max="-12" step="0.1" value="-14" class="precision-slider" />
+                  <div class="turb-compact-strip mono" id="turb-compact-strip">
+                    <span class="t-pill">r₀: <strong id="turb-mini-r0">24.5mm</strong></span>
+                    <span class="t-pill">σ_R²: <strong id="turb-mini-rytov">0.142</strong></span>
+                    <span class="t-pill">FADE: <strong id="turb-mini-fade">-12%</strong></span>
+                    <span class="t-pill">STREHL: <strong id="turb-mini-strehl">0.85</strong></span>
+                    <span class="t-pill chip-regime" id="turb-mini-regime">MODERATE</span>
+                  </div>
+                </div>
+
+                <!-- Platform Vibration Amplitude -->
+                <div class="control-row">
+                  <div class="control-meta">
+                    <span class="c-title">Platform Jitter Amplitude</span>
+                    <span class="c-val mono" id="vib-amp-disp">0.30 mrad</span>
+                  </div>
+                  <input type="range" id="slider-vib-amp" min="0" max="1.5" step="0.05" value="0.30" class="precision-slider" />
+                </div>
+
+                <!-- Platform Vibration Frequency -->
+                <div class="control-row">
+                  <div class="control-meta">
+                    <span class="c-title">Jitter Frequency</span>
+                    <span class="c-val mono" id="vib-freq-disp">10.0 Hz</span>
+                  </div>
+                  <input type="range" id="slider-vib-freq" min="1" max="50" step="1" value="10" class="precision-slider" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Ground Station Event Console -->
+            <div class="station-panel console-panel">
+              <div class="panel-cap">
+                <span class="cap-title">MISSION EVENT LOG</span>
+                <button class="tool-btn-xs" id="btn-clear-log">CLEAR</button>
+              </div>
+              <div class="event-terminal mono" id="event-log-terminal">
+                <div class="log-line init">[00:00.000] [SYSTEM] DRISHTI-PAT Coarse PAT Simulator Initialized.</div>
+                <div class="log-line info">[00:00.000] [STATUS] Ground Terminal Comm Bus Connected.</div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+
+      <!-- ------------------------------------------------------------------
+           PANEL 2: GIMBAL & HARDWARE CONTROL LAB
+           ------------------------------------------------------------------ -->
+      <div class="workspace-panel" id="panel-hardware-control">
+        <div class="control-lab-layout">
+          <!-- Gimbal PID Controller -->
+          <div class="station-panel">
+            <div class="panel-cap">
+              <span class="cap-title">2-AXIS GIMBAL PID SERVO LOOP</span>
+              <button class="action-btn-primary" id="btn-apply-pid">APPLY SERVO</button>
+            </div>
+            <p class="panel-explainer">Proportional, integral, and derivative servo gains with velocity feedforward compensation ($K_{ff}$) for pan/tilt actuator loops.</p>
+
+            <div class="control-fields-box">
+              <div class="field-item">
+                <label for="pid-kp">PROPORTIONAL GAIN (Kp):</label>
+                <div class="slider-field">
+                  <input type="range" id="pid-kp" min="0.05" max="1.5" step="0.05" value="0.35" class="precision-slider" />
+                  <span class="field-val mono" id="pid-kp-disp">0.35</span>
+                </div>
+              </div>
+
+              <div class="field-item">
+                <label for="pid-ki">INTEGRAL GAIN (Ki):</label>
+                <div class="slider-field">
+                  <input type="range" id="pid-ki" min="0.0" max="0.5" step="0.02" value="0.0" class="precision-slider" />
+                  <span class="field-val mono" id="pid-ki-disp">0.00</span>
+                </div>
+              </div>
+
+              <div class="field-item">
+                <label for="pid-kd">DERIVATIVE GAIN (Kd):</label>
+                <div class="slider-field">
+                  <input type="range" id="pid-kd" min="0.01" max="0.5" step="0.01" value="0.15" class="precision-slider" />
+                  <span class="field-val mono" id="pid-kd-disp">0.15</span>
+                </div>
+              </div>
+
+              <div class="field-item">
+                <label for="pid-kff">VELOCITY FEEDFORWARD (K_ff):</label>
+                <div class="slider-field">
+                  <input type="range" id="pid-kff" min="0.0" max="1.5" step="0.05" value="1.0" class="precision-slider" />
+                  <span class="field-val mono" id="pid-kff-disp">1.00</span>
+                </div>
+              </div>
+
+              <div class="checkbox-field">
+                <label class="clean-checkbox">
+                  <input type="checkbox" id="chk-feedforward" checked />
+                  <span>Enable Target Velocity Feedforward Compensation</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Actuator Physical Limits & Latency -->
+          <div class="station-panel">
+            <div class="panel-cap">
+              <span class="cap-title">ACTUATOR SLEW LIMITS & BUS LATENCY</span>
+              <button class="action-btn-primary" id="btn-apply-hw">APPLY ACTUATOR</button>
+            </div>
+            <p class="panel-explainer">Physical electro-mechanical slew rate limits and discrete command delay modeling hardware driver pipeline latency.</p>
+
+            <div class="control-fields-box">
+              <div class="field-item">
+                <label for="hw-max-vel">MAX SLEW VELOCITY (rad/s):</label>
+                <div class="slider-field">
+                  <input type="range" id="hw-max-vel" min="0.05" max="1.5" step="0.05" value="0.50" class="precision-slider" />
+                  <span class="field-val mono" id="hw-max-vel-disp">0.50 rad/s</span>
+                </div>
+              </div>
+
+              <div class="field-item">
+                <label for="hw-max-acc">MAX SLEW ACCELERATION (rad/s²):</label>
+                <div class="slider-field">
+                  <input type="range" id="hw-max-acc" min="0.1" max="3.0" step="0.1" value="1.0" class="precision-slider" />
+                  <span class="field-val mono" id="hw-max-acc-disp">1.00 rad/s²</span>
+                </div>
+              </div>
+
+              <div class="field-item">
+                <label for="hw-latency">COMMAND DELAY QUEUE (FRAMES):</label>
+                <div class="slider-field">
+                  <input type="range" id="hw-latency" min="0" max="6" step="1" value="2" class="precision-slider" />
+                  <span class="field-val mono" id="hw-latency-disp">2 frames (~66 ms)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Hierarchical Reacquisition Controller -->
+          <div class="station-panel">
+            <div class="panel-cap">
+              <span class="cap-title">REACQUISITION SEARCH CONTROLLER</span>
+              <button class="action-btn-primary" id="btn-apply-reacq">APPLY REACQ</button>
+            </div>
+            <p class="panel-explainer">Hierarchical search law upon Line-of-Sight track loss: Tier 1 forward-projected uncertainty ellipse and Tier 2 expanding spiral.</p>
+
+            <div class="control-fields-box">
+              <div class="checkbox-field">
+                <label class="clean-checkbox">
+                  <input type="checkbox" id="chk-pred-search" checked />
+                  <span>Tier 1 Localized Predictive Search (A/B Comparative Benchmark Toggle)</span>
+                </label>
+              </div>
+
+              <div class="field-item">
+                <label for="reacq-budget">TIER 1 SEARCH BUDGET (FRAMES):</label>
+                <div class="slider-field">
+                  <input type="range" id="reacq-budget" min="5" max="50" step="5" value="25" class="precision-slider" />
+                  <span class="field-val mono" id="reacq-budget-disp">25 frames</span>
+                </div>
+              </div>
+
+              <div class="field-item">
+                <label for="reacq-rate">GIMBAL SCAN RATE (rad/s):</label>
+                <div class="slider-field">
+                  <input type="range" id="reacq-rate" min="0.04" max="0.30" step="0.02" value="0.12" class="precision-slider" />
+                  <span class="field-val mono" id="reacq-rate-disp">0.12 rad/s</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Auto-Exposure / AGC Optical Controller -->
+          <div class="station-panel">
+            <div class="panel-cap">
+              <span class="cap-title">CMOS SENSOR AUTO-EXPOSURE / AGC</span>
+            </div>
+            <p class="panel-explainer">Automated exposure gain adaptation keeps target beacon spot within optimal dynamic range (~180–220 counts) across range variations.</p>
+
+            <div class="control-fields-box">
+              <div class="checkbox-field">
+                <label class="clean-checkbox">
+                  <input type="checkbox" id="chk-auto-exposure" checked />
+                  <span>Enable Autonomous Sensor Exposure & Gain Control</span>
+                </label>
+              </div>
+              <div class="meta-data-line mono">
+                <span>TARGET PEAK: 200.0 counts</span>
+                <span>DYNAMIC RANGE: 0.02x to 50.0x</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ------------------------------------------------------------------
+           PANEL 3: MULTI-TARGET & OPTICS LAB
+           ------------------------------------------------------------------ -->
+      <div class="workspace-panel" id="panel-target-optics">
+        <div class="control-lab-layout">
+          <!-- Target Kinematics & Trajectory Profiles -->
+          <div class="station-panel">
+            <div class="panel-cap">
+              <span class="cap-title">TARGET TRAJECTORY & KINEMATICS STRATEGY</span>
+              <button class="action-btn-primary" id="btn-apply-motion">SET TRAJECTORY</button>
+            </div>
+            <p class="panel-explainer">Dynamically switch the kinematic motion pattern of optical beacon terminals in the 2D angular space.</p>
+
+            <div class="control-fields-box">
+              <div class="field-item">
+                <label for="motion-type-select">KINEMATIC MOTION PROFILE:</label>
+                <select id="motion-type-select" class="station-select-full">
+                  <option value="straight_line" selected>Rectilinear (Constant Velocity)</option>
+                  <option value="circular">Circular Orbit</option>
+                  <option value="figure_eight">Lissajous Lemniscate (Figure Eight)</option>
+                  <option value="spiral">Archimedean Expanding Spiral</option>
+                  <option value="sinusoidal">Transverse Harmonic Oscillation</option>
+                  <option value="random">Stochastic Bounded Random Walk</option>
+                </select>
+              </div>
+
+              <div class="field-item">
+                <label for="target-switch-select">DESIGNATED TRACKING BEACON:</label>
+                <select id="target-switch-select" class="station-select-full">
+                  <option value="" selected>target_0 (Primary Beacon)</option>
+                </select>
+              </div>
+
+              <div class="checkbox-field">
+                <label class="clean-checkbox">
+                  <input type="checkbox" id="chk-signature-verif" />
+                  <span>Temporal Blinking Signature Verification (Reject Clutter / Decoys)</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Comprehensive Sensor Noise Models -->
+          <div class="station-panel">
+            <div class="panel-cap">
+              <span class="cap-title">OPTICAL SENSOR NOISE MODELS</span>
+              <button class="action-btn-primary" id="btn-apply-noise">APPLY NOISE</button>
+            </div>
+            <p class="panel-explainer">Configure Gaussian readout noise, Poisson photon shot noise, and impulse hot/dead pixel defects.</p>
+
+            <div class="control-fields-box">
+              <div class="checkboxes-row">
+                <label class="clean-checkbox"><input type="checkbox" id="noise-chk-gaussian" checked /> <span>Gaussian Readout</span></label>
+                <label class="clean-checkbox"><input type="checkbox" id="noise-chk-poisson" /> <span>Poisson Shot</span></label>
+                <label class="clean-checkbox"><input type="checkbox" id="noise-chk-saltpepper" /> <span>Salt & Pepper</span></label>
+              </div>
+
+              <div class="field-item">
+                <label for="noise-std-input">GAUSSIAN READOUT STD (COUNTS):</label>
+                <div class="slider-field">
+                  <input type="range" id="noise-std-input" min="0" max="15" step="0.5" value="4.0" class="precision-slider" />
+                  <span class="field-val mono" id="noise-std-disp">4.0 counts</span>
+                </div>
+              </div>
+
+              <div class="field-item">
+                <label for="noise-poisson-input">POISSON PHOTON CONVERSION SCALE:</label>
+                <div class="slider-field">
+                  <input type="range" id="noise-poisson-input" min="0.1" max="5.0" step="0.1" value="1.0" class="precision-slider" />
+                  <span class="field-val mono" id="noise-poisson-disp">1.00</span>
+                </div>
+              </div>
+
+              <div class="field-item">
+                <label for="noise-sp-input">IMPULSE DEFECT PROBABILITY:</label>
+                <div class="slider-field">
+                  <input type="range" id="noise-sp-input" min="0.0" max="0.005" step="0.0005" value="0.0005" class="precision-slider" />
+                  <span class="field-val mono" id="noise-sp-disp">0.05%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Comprehensive Atmospheric Turbulence & Wave Propagation Analyzer -->
+          <div class="station-panel">
+            <div class="panel-cap">
+              <span class="cap-title">ATMOSPHERIC TURBULENCE & WAVE PROPAGATION ANALYZER</span>
+              <span class="status-chip ok" id="turb-regime-badge">MODERATE TURBULENCE</span>
+            </div>
+            <p class="panel-explainer">Kolmogorov phase screen propagation physics, Fried parameter, Rytov variance, scintillation fading, PSF spot blur, Strehl ratio, and beam wander.</p>
+
+            <div class="turbulence-metrics-grid mono">
+              <div class="turb-metric-card">
+                <span class="tm-label">REFRACTIVE STRUCTURE CONSTANT (Cₙ²)</span>
+                <span class="tm-val highlight" id="turb-cn2-val">2.00e-14</span>
+                <span class="tm-unit">m⁻²/³</span>
+              </div>
+              <div class="turb-metric-card">
+                <span class="tm-label">FRIED COHERENCE LENGTH (r₀)</span>
+                <span class="tm-val cyan" id="turb-r0-val">24.50 mm</span>
+                <span class="tm-unit">λ = 1550 nm @ 5.0 km</span>
+              </div>
+              <div class="turb-metric-card">
+                <span class="tm-label">RYTOV LOG-AMPLITUDE VARIANCE (σ_R²)</span>
+                <span class="tm-val" id="turb-rytov-val">0.2850</span>
+                <span class="tm-unit">Plane Wave Formulation</span>
+              </div>
+              <div class="turb-metric-card">
+                <span class="tm-label">SCINTILLATION INDEX (σ_I²)</span>
+                <span class="tm-val" id="turb-scint-val">0.2210</span>
+                <span class="tm-unit">Aperture-Averaged</span>
+              </div>
+              <div class="turb-metric-card">
+                <span class="tm-label">INTENSITY ATTENUATION / FADE</span>
+                <span class="tm-val amber" id="turb-fade-val">-18.2% (81.8% transm.)</span>
+                <span class="tm-unit">Scintillation Deep Fade</span>
+              </div>
+              <div class="turb-metric-card">
+                <span class="tm-label">PSF SPOT BROADENING (BLUR σ)</span>
+                <span class="tm-val" id="turb-blur-val">1.43 px</span>
+                <span class="tm-unit">Aperture D / r₀ Gaussian</span>
+              </div>
+              <div class="turb-metric-card">
+                <span class="tm-label">TELESCOPE STREHL RATIO (S)</span>
+                <span class="tm-val cyan" id="turb-strehl-val">0.620</span>
+                <span class="tm-unit">10 cm Optical Aperture</span>
+              </div>
+              <div class="turb-metric-card">
+                <span class="tm-label">ANGULAR BEAM WANDER (σ_θ)</span>
+                <span class="tm-val" id="turb-wander-val">0.215 mrad</span>
+                <span class="tm-unit">Tilt Random Walk (1σ)</span>
+              </div>
+              <div class="turb-metric-card">
+                <span class="tm-label">TURBULENCE SEVERITY SCORE</span>
+                <span class="tm-val amber" id="turb-sev-val">0.500 [50%]</span>
+                <span class="tm-unit">KF ↔ PF Transition Metric</span>
+              </div>
+              <div class="turb-metric-card">
+                <span class="tm-label">PHASE SCREEN FFT LATENCY</span>
+                <span class="tm-val green" id="turb-time-val">1.240 ms</span>
+                <span class="tm-unit">Spectral Synthesis FFT</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ------------------------------------------------------------------
+           PANEL 4: QUANTITATIVE KPI & PERFORMANCE REPORT
+           ------------------------------------------------------------------ -->
+      <div class="workspace-panel" id="panel-performance-metrics">
+        <div class="performance-report-layout">
+          <!-- Report Header -->
+          <div class="station-panel report-header-bar">
+            <div class="report-title-group">
+              <span class="report-heading">ISRO / DOS PS-26169 QUANTITATIVE VERIFICATION SCORECARD</span>
+              <span class="benchmark-badge">OFFICIAL BENCHMARK EVALUATION</span>
+            </div>
+            <div class="report-export-buttons">
+              <button class="tool-btn" id="btn-download-csv">⤓ EXPORT CSV</button>
+              <button class="tool-btn" id="btn-download-json">⤓ EXPORT JSON</button>
+            </div>
+          </div>
+
+          <!-- Quantitative KPI Grid -->
+          <div class="kpi-scorecard-grid">
+            <div class="kpi-readout-card">
+              <span class="kpi-tag">INITIAL ACQUISITION HORIZON</span>
+              <span class="kpi-main-val mono" id="kpi-acq-time">0.495 s</span>
+              <span class="kpi-sub-text">Specification limit: &lt; 1.0 s to initial lock</span>
+            </div>
+
+            <div class="kpi-readout-card">
+              <span class="kpi-tag">MEAN TRACKING ERROR</span>
+              <span class="kpi-main-val mono" id="kpi-mean-err">0.795 mrad</span>
+              <span class="kpi-sub-text">Radial boresight offset average</span>
+            </div>
+
+            <div class="kpi-readout-card">
+              <span class="kpi-tag">PEAK TRACKING ERROR</span>
+              <span class="kpi-main-val mono" id="kpi-max-err">1.820 mrad</span>
+              <span class="kpi-sub-text">Peak excursion during disturbance injection</span>
+            </div>
+
+            <div class="kpi-readout-card">
+              <span class="kpi-tag">ROOT-MEAN-SQUARE ERROR (RMSE)</span>
+              <span class="kpi-main-val mono" id="kpi-rmse-err">1.042 mrad</span>
+              <span class="kpi-sub-text">ISRO Fine Pointing Spec limit: 2.0 mrad</span>
+            </div>
+
+            <div class="kpi-readout-card">
+              <span class="kpi-tag">LOCK RETENTION RATE</span>
+              <span class="kpi-main-val mono status-locked" id="kpi-lock-rate">94.8 %</span>
+              <span class="kpi-sub-text">Percentage of simulated frames in lock</span>
+            </div>
+
+            <div class="kpi-readout-card">
+              <span class="kpi-tag">ALGORITHM PROCESSING RATE</span>
+              <span class="kpi-main-val mono highlight" id="kpi-algo-fps">54.2 FPS</span>
+              <span class="kpi-sub-text">Per-frame latency: ~18.4 ms (&gt; 30 FPS target)</span>
+            </div>
+          </div>
+
+          <!-- Stage Execution Profiling Table -->
+          <div class="station-panel">
+            <div class="panel-cap">
+              <span class="cap-title">CLOSED-LOOP PIPELINE STAGE PROFILING BREAKDOWN</span>
+            </div>
+            <table class="instrument-table">
+              <thead>
+                <tr>
+                  <th>PIPELINE STAGE / OPERATION</th>
+                  <th>PER-FRAME LATENCY</th>
+                  <th>SUBSYSTEM CATEGORY</th>
+                  <th>VERIFICATION STATUS</th>
+                </tr>
+              </thead>
+              <tbody class="mono">
+                <tr>
+                  <td>1. Synthetic Frame Rendering & Gaussian PSF Optics</td>
+                  <td id="prof-render">6.10 ms</td>
+                  <td>Optics Engine</td>
+                  <td><span class="status-chip ok">NOMINAL</span></td>
+                </tr>
+                <tr>
+                  <td>2. Kolmogorov Atmospheric Turbulence (Phase Screen & Scintillation)</td>
+                  <td id="prof-turb">1.24 ms</td>
+                  <td>Atmospheric Sim</td>
+                  <td><span class="status-chip ok" id="prof-turb-chip">ACTIVE</span></td>
+                </tr>
+                <tr>
+                  <td>3. Optical Sensor Noise Suite (Gaussian & Poisson Shot)</td>
+                  <td id="prof-noise">0.45 ms</td>
+                  <td>Detector Model</td>
+                  <td><span class="status-chip ok">NOMINAL</span></td>
+                </tr>
+                <tr>
+                  <td>4. Platform Vibration & Angular Jitter Dynamics</td>
+                  <td id="prof-vib">0.05 ms</td>
+                  <td>Mechanical Sim</td>
+                  <td><span class="status-chip ok">NOMINAL</span></td>
+                </tr>
+                <tr>
+                  <td>5. Dynamic Occlusion Geometry & Shadowing</td>
+                  <td id="prof-occ">0.02 ms</td>
+                  <td>LOS Geometry</td>
+                  <td><span class="status-chip ok">NOMINAL</span></td>
+                </tr>
+                <tr>
+                  <td>6. Optical Detection (Morphological Top-Hat + Centroiding)</td>
+                  <td id="prof-detect">6.15 ms</td>
+                  <td>Computer Vision</td>
+                  <td><span class="status-chip ok">NOMINAL</span></td>
+                </tr>
+                <tr>
+                  <td>7. State Estimation & Filtering (Kalman / Particle Filter)</td>
+                  <td id="prof-track">0.14 ms</td>
+                  <td>Estimation Engine</td>
+                  <td><span class="status-chip ok">OPTIMIZED</span></td>
+                </tr>
+                <tr>
+                  <td>8. 2-Axis Gimbal Control Laws (PID + Slew Limiter + Latency)</td>
+                  <td id="prof-control">0.03 ms</td>
+                  <td>Control Law</td>
+                  <td><span class="status-chip ok">OPTIMIZED</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Root Cause Diagnosis Card -->
+          <div class="station-panel">
+            <div class="panel-cap">
+              <span class="cap-title">AUTOMATED TRACK-LOSS ROOT CAUSE DIAGNOSIS</span>
+            </div>
+            <div class="diagnosis-box mono" id="diagnosis-content">
+              <span class="diag-status ok">NOMINAL CLOSED-LOOP TRACKING — ZERO TRACK LOSS DETECTED</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- ====================================================================
+         4. BOTTOM OPERATIONS & TRANSPORT BAR
+         ==================================================================== -->
+    <footer class="station-transport-bar">
+      <!-- Transport Buttons -->
+      <div class="transport-btn-group">
+        <button class="transport-btn play-btn" id="btn-play">
+          <span class="btn-icon">▶</span> PLAY
+        </button>
+        <button class="transport-btn" id="btn-pause">
+          <span class="btn-icon">⏸</span> PAUSE
+        </button>
+        <button class="transport-btn" id="btn-step">
+          <span class="btn-icon">⏭</span> STEP
+        </button>
+        <button class="transport-btn" id="btn-reset">
+          <span class="btn-icon">↺</span> RESET
+        </button>
+      </div>
+
+      <!-- Playback Speed -->
+      <div class="transport-speed-ctrl">
+        <span class="speed-tag">SPEED:</span>
+        <input type="range" id="slider-speed" min="0.2" max="3.0" step="0.1" value="1.0" class="speed-slider" />
+        <span class="speed-display mono" id="speed-label">1.0x</span>
+      </div>
+
+      <!-- Integrated Mission Timeline Progress -->
+      <div class="mission-timeline-wrapper">
+        <div class="timeline-groove">
+          <div class="timeline-fill" id="sim-progress-bar"></div>
+        </div>
+      </div>
+
+      <!-- Quick Export Buttons -->
+      <div class="transport-export-group">
+        <button class="tool-btn-sm" id="btn-export-csv-quick">⤓ CSV</button>
+        <button class="tool-btn-sm" id="btn-export-json-quick">⤓ JSON</button>
+      </div>
+    </footer>
+
+    <!-- ====================================================================
+         5. OPTICAL VIDEO BENCHMARK & CONVERSION MODAL
+         ==================================================================== -->
+    <div class="modal-backdrop" id="video-modal" style="display: none;">
+      <div class="modal-dialog video-modal-dialog">
+        <div class="modal-header">
+          <div class="modal-title-group">
+            <span class="modal-icon">🎬</span>
+            <div>
+              <h3>Optical Video Source & Benchmark Evaluator</h3>
+              <p class="modal-sub">Free Space Optical Communication (FSOC) Real-World Video PAT Conversion</p>
+            </div>
+          </div>
+          <button class="modal-close-btn" id="btn-close-video-modal" title="Close">✕</button>
+        </div>
+
+        <div class="modal-tabs">
+          <button class="modal-tab active" id="tab-benchmarks-btn">📂 Benchmark Videos</button>
+          <button class="modal-tab" id="tab-upload-btn">⬆ Upload Custom Video</button>
+        </div>
+
+        <div class="modal-body">
+          <!-- View 1: Preset Benchmarks -->
+          <div class="modal-tab-content active" id="modal-tab-benchmarks">
+            <p class="section-desc">Select an authentic laboratory or observatory laser video stream to execute closed-loop PAT tracking and error analysis:</p>
+            <div class="benchmark-grid" id="benchmark-video-list">
+              <!-- Dynamically populated from /api/simulation/video_benchmarks -->
+            </div>
+          </div>
+
+          <!-- View 2: Upload Custom Video -->
+          <div class="modal-tab-content" id="modal-tab-upload">
+            <div class="upload-dropzone" id="upload-dropzone">
+              <input type="file" id="video-file-input" accept=".mp4,.avi,.ogv,.webm,.mkv" style="display: none;" />
+              <div class="dropzone-inner">
+                <span class="dropzone-icon">📥</span>
+                <h4>Drag & Drop Optical Video File</h4>
+                <p>or <button type="button" class="action-btn-primary" id="btn-browse-file">Browse Computer</button></p>
+                <span class="file-types-hint">Supported Formats: MP4, AVI, WEBM, OGV, MKV (Auto-decoded via OpenCV)</span>
+              </div>
+            </div>
+
+            <div class="upload-status-box" id="upload-status-box" style="display: none;">
+              <div class="status-row">
+                <span class="upload-filename mono" id="upload-filename-txt">laser_test.mp4</span>
+                <span class="upload-progress-txt mono" id="upload-progress-txt">Processing...</span>
+              </div>
+              <div class="progress-bar-track">
+                <div class="progress-bar-fill" id="upload-progress-bar" style="width: 0%;"></div>
+              </div>
+              <div class="upload-details mono" id="upload-details-txt"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="tool-btn" id="btn-cancel-video-modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js?v=2.4"></script>
+</body>
+</html>
