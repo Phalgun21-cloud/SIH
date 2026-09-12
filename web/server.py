@@ -1428,7 +1428,7 @@ async def websocket_simulation(websocket: WebSocket):
 # Mount Static Frontend
 FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
 if FRONTEND_DIR.exists():
-    app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
+    app.mount("/", StaticFiles(directory="web/frontend", html=True), name="frontend")
 
 
 if __name__ == "__main__":
