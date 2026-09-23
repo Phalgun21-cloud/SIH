@@ -8,7 +8,7 @@ and disturbance statistics. Exports structured event logs to JSON, CSV, and form
 
 from __future__ import annotations
 from dataclasses import dataclass, asdict, field
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import json
 import csv
 import numpy as np

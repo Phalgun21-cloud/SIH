@@ -19,7 +19,7 @@ import os
 import json
 import time
 import math
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List, Tuple, Union
 from collections import deque
 import numpy as np
 
