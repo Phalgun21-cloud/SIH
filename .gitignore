@@ -48,3 +48,7 @@ logs/
 *.csv
 *.json
 !config/*.json
+
+# Shortcuts and runtime uploads
+*.lnk
+data/videos/uploads/
