@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Adaptive Hybrid Tracker managing Kalman <-> Particle Filter transitions.
 Smart India Hackathon - Problem Statement 26169 (ISRO / DOS)

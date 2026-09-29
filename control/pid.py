@@ -3,7 +3,7 @@ Gimbal PID Controller with Integral Anti-Windup, Rate Damping, and Velocity Feed
 Smart India Hackathon - FSOC PAT Simulator (ISRO / DOS PS 26169)
 """
 
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Any
 import numpy as np
 from contracts import CameraState, TargetState
 
