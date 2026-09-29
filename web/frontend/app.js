@@ -865,48 +865,92 @@
     const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
 
+    const padLeft = 48;
+    const padBottom = 26;
+    const padTop = 18;
+    const padRight = 15;
+    const graphW = w - padLeft - padRight;
+    const graphH = h - padTop - padBottom;
+    const zeroY = padTop + graphH;
+
     // Grid lines
     ctx.strokeStyle = '#1e293b';
     ctx.lineWidth = 1;
-    for (let c = 1; c < 8; c++) {
-      const gx = (c / 8) * w;
+    for (let c = 1; c < 6; c++) {
+      const gx = padLeft + (c / 6) * graphW;
       ctx.beginPath();
-      ctx.moveTo(gx, 0); ctx.lineTo(gx, h);
+      ctx.moveTo(gx, padTop); ctx.lineTo(gx, zeroY);
       ctx.stroke();
     }
     for (let r = 1; r < 4; r++) {
-      const gy = (r / 4) * h;
+      const gy = padTop + (r / 4) * graphH;
       ctx.beginPath();
-      ctx.moveTo(0, gy); ctx.lineTo(w, gy);
+      ctx.moveTo(padLeft, gy); ctx.lineTo(padLeft + graphW, gy);
       ctx.stroke();
     }
 
     // Specification Threshold line (2.0 mrad)
-    const threshY = h * 0.35;
+    const threshVal = 2.0;
+    const threshY = zeroY - (threshVal / 3.0) * graphH;
     ctx.strokeStyle = '#ff5252';
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
-    ctx.moveTo(0, threshY); ctx.lineTo(w, threshY);
+    ctx.moveTo(padLeft, threshY); ctx.lineTo(padLeft + graphW, threshY);
     ctx.stroke();
     ctx.setLineDash([]);
 
     ctx.fillStyle = '#ff5252';
-    ctx.font = '10px "JetBrains Mono", monospace';
-    ctx.fillText('SPEC LIMIT 2.0 mrad', w - 120, threshY - 4);
+    ctx.font = '9px "JetBrains Mono", monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText('SPEC LIMIT 2.0 mrad', padLeft + graphW - 10, threshY - 4);
 
-    const zeroY = h * 0.88;
+    // Main X & Y Axis Lines
     ctx.strokeStyle = '#334155';
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(0, zeroY); ctx.lineTo(w, zeroY);
+    ctx.moveTo(padLeft, padTop); ctx.lineTo(padLeft, zeroY); ctx.lineTo(padLeft + graphW, zeroY);
     ctx.stroke();
+
+    // Y-Axis Tick Mark Labels (0.0 to 3.0 mrad)
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '9px "JetBrains Mono", monospace';
+    ctx.textAlign = 'right';
+    const yTicks = [
+      { val: '3.0', y: padTop + 4 },
+      { val: '2.0', y: threshY + 3 },
+      { val: '1.0', y: padTop + graphH * 0.66 },
+      { val: '0.0', y: zeroY }
+    ];
+    yTicks.forEach(t => ctx.fillText(t.val, padLeft - 6, t.y));
+
+    // Y-Axis Title Label
+    ctx.fillStyle = '#00E5FF';
+    ctx.font = '9px "JetBrains Mono", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('▲ Y: POINTING ERROR (mrad) / CONFIDENCE (%)', padLeft + 6, padTop + 10);
+
+    // X-Axis Title & Time Ticks Label
+    ctx.fillStyle = '#94a3b8';
+    ctx.textAlign = 'center';
+    ctx.fillText(`▶ X: SIMULATION TIME t (s) [WINDOW: ${(maxHistory * 0.25).toFixed(0)}s]`, padLeft + graphW / 2, h - 6);
 
     const n = historyData.errors.length;
     if (n < 2) return;
 
     const displayCount = Math.min(n, maxHistory);
     const startIdx = n - displayCount;
+
+    // Time Ticks across X-Axis
+    const startTime = historyData.times[startIdx] || 0;
+    const endTime = historyData.times[n - 1] || (startTime + 10);
+    const timeStep = (endTime - startTime) / 4;
+    ctx.textAlign = 'center';
+    for (let k = 0; k <= 4; k++) {
+      const tx = padLeft + (k / 4) * graphW;
+      const tVal = (startTime + k * timeStep).toFixed(1) + 's';
+      ctx.fillText(tVal, tx, zeroY + 14);
+    }
 
     // Draw Channel 1: Pointing Error (Cyan)
     if (chVisible.ch1) {
@@ -915,9 +959,9 @@
       ctx.beginPath();
       for (let i = 0; i < displayCount; i++) {
         const dataIdx = startIdx + i;
-        const x = (i / Math.max(1, displayCount - 1)) * w;
+        const x = padLeft + (i / Math.max(1, displayCount - 1)) * graphW;
         const val = historyData.errors[dataIdx];
-        const y = zeroY - (val / 3.0) * (zeroY - 10);
+        const y = zeroY - Math.min(1.0, val / 3.0) * graphH;
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
@@ -931,9 +975,9 @@
       ctx.beginPath();
       for (let i = 0; i < displayCount; i++) {
         const dataIdx = startIdx + i;
-        const x = (i / Math.max(1, displayCount - 1)) * w;
+        const x = padLeft + (i / Math.max(1, displayCount - 1)) * graphW;
         const conf = historyData.confidences[dataIdx];
-        const y = zeroY - conf * (zeroY - 20);
+        const y = zeroY - Math.min(1.0, conf) * (graphH * 0.9);
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
@@ -948,9 +992,9 @@
       ctx.beginPath();
       for (let i = 0; i < displayCount; i++) {
         const dataIdx = startIdx + i;
-        const x = (i / Math.max(1, displayCount - 1)) * w;
+        const x = padLeft + (i / Math.max(1, displayCount - 1)) * graphW;
         const sev = historyData.severities[dataIdx];
-        const y = zeroY - sev * (zeroY - 30);
+        const y = zeroY - Math.min(1.0, sev) * (graphH * 0.85);
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
@@ -965,11 +1009,11 @@
       ctx.beginPath();
       for (let i = 0; i < displayCount; i++) {
         const dataIdx = startIdx + i;
-        const x = (i / Math.max(1, displayCount - 1)) * w;
+        const x = padLeft + (i / Math.max(1, displayCount - 1)) * graphW;
         const ber = historyData.bers[dataIdx] || 1e-9;
         const logVal = -Math.log10(Math.max(1e-10, ber));
         const norm = Math.max(0.05, Math.min(1.0, logVal / 9.0));
-        const y = zeroY - norm * (zeroY - 15);
+        const y = zeroY - norm * (graphH * 0.9);
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
@@ -1020,50 +1064,84 @@
     const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
 
+    const padLeft = 45;
+    const padBottom = 26;
+    const padTop = 18;
+    const padRight = 15;
+    const graphW = w - padLeft - padRight;
+    const graphH = h - padTop - padBottom;
+    const zeroY = padTop + graphH;
+
     // Dark grid lines
     ctx.strokeStyle = '#1e1c2e';
     ctx.lineWidth = 1;
     for (let i = 1; i <= 5; i++) {
-      const gx = (i / 6) * w;
+      const gx = padLeft + (i / 6) * graphW;
       ctx.beginPath();
-      ctx.moveTo(gx, 0); ctx.lineTo(gx, h);
+      ctx.moveTo(gx, padTop); ctx.lineTo(gx, zeroY);
       ctx.stroke();
     }
     for (let j = 1; j <= 3; j++) {
-      const gy = (j / 4) * h;
+      const gy = padTop + (j / 4) * graphH;
       ctx.beginPath();
-      ctx.moveTo(0, gy); ctx.lineTo(w, gy);
+      ctx.moveTo(padLeft, gy); ctx.lineTo(padLeft + graphW, gy);
       ctx.stroke();
     }
 
-    // Frequency labels (Logarithmic spectrum 1Hz to 10kHz)
-    ctx.fillStyle = '#64748b';
+    // Main X & Y Axis Lines
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(padLeft, padTop); ctx.lineTo(padLeft, zeroY); ctx.lineTo(padLeft + graphW, zeroY);
+    ctx.stroke();
+
+    // Y-Axis Ticks (Power Spectral Density Log Scale)
+    ctx.fillStyle = '#94a3b8';
     ctx.font = '9px "JetBrains Mono", monospace';
+    ctx.textAlign = 'right';
+    const yPSD = ['10⁰', '10⁻²', '10⁻⁴', '10⁻⁶'];
+    yPSD.forEach((label, idx) => {
+      const gy = padTop + (idx / 3) * graphH;
+      ctx.fillText(label, padLeft - 6, gy + 3);
+    });
+
+    // Y-Axis Title Label
+    ctx.fillStyle = '#c084fc';
+    ctx.font = '9px "JetBrains Mono", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('▲ Y: PSD S(f) (rad²/Hz)', padLeft + 6, padTop + 10);
+
+    // X-Axis Title & Frequency Ticks (1Hz to 10kHz)
+    ctx.fillStyle = '#94a3b8';
+    ctx.textAlign = 'center';
+    ctx.fillText('▶ X: FREQUENCY f (Hz) [LOGARITHMIC SPECTRUM 1Hz - 10kHz]', padLeft + graphW / 2, h - 6);
+
     const freqs = ['1Hz', '10Hz', '100Hz', '1kHz', '10kHz'];
     freqs.forEach((f, idx) => {
-      const fx = ((idx + 1) / 6) * w - 10;
-      ctx.fillText(f, fx, h - 5);
+      const fx = padLeft + ((idx + 1) / 6) * graphW;
+      ctx.fillText(f, fx, zeroY + 14);
     });
 
     // Kolmogorov f^(-5/3) PSD Curve & Gradient fill
-    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    const grad = ctx.createLinearGradient(0, padTop, 0, zeroY);
     grad.addColorStop(0, 'rgba(192, 132, 252, 0.35)');
     grad.addColorStop(1, 'rgba(192, 132, 252, 0.00)');
 
     ctx.beginPath();
-    ctx.moveTo(0, h * 0.9);
+    ctx.moveTo(padLeft, zeroY);
 
     const nowTime = performance.now() * 0.004;
     const noiseAmp = (100 - (currentOsnr || 28.4)) * 0.15;
 
-    for (let x = 0; x < w; x++) {
-      const freq = 0.5 + (x / w) * 12.0;
+    for (let x = 0; x < graphW; x++) {
+      const freq = 0.5 + (x / graphW) * 12.0;
       const psdBase = 1.0 / Math.pow(freq, 5 / 3);
       const ripple = Math.sin(x * 0.08 + nowTime) * noiseAmp + Math.cos(x * 0.15 - nowTime * 0.7) * (noiseAmp * 0.5);
-      const y = h * 0.82 - Math.min(h * 0.72, psdBase * 55.0 + ripple);
-      ctx.lineTo(x, y);
+      const px = padLeft + x;
+      const py = zeroY - Math.min(graphH * 0.95, (psdBase * 55.0 + ripple) * (graphH / 100));
+      ctx.lineTo(px, py);
     }
-    ctx.lineTo(w, h * 0.9);
+    ctx.lineTo(padLeft + graphW, zeroY);
     ctx.closePath();
     ctx.fillStyle = grad;
     ctx.fill();
@@ -1072,34 +1150,31 @@
     ctx.strokeStyle = '#c084fc';
     ctx.lineWidth = 2.0;
     ctx.beginPath();
-    for (let x = 0; x < w; x++) {
-      const freq = 0.5 + (x / w) * 12.0;
+    for (let x = 0; x < graphW; x++) {
+      const freq = 0.5 + (x / graphW) * 12.0;
       const psdBase = 1.0 / Math.pow(freq, 5 / 3);
       const ripple = Math.sin(x * 0.08 + nowTime) * noiseAmp + Math.cos(x * 0.15 - nowTime * 0.7) * (noiseAmp * 0.5);
-      const y = h * 0.82 - Math.min(h * 0.72, psdBase * 55.0 + ripple);
-      if (x === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
+      const px = padLeft + x;
+      const py = zeroY - Math.min(graphH * 0.95, (psdBase * 55.0 + ripple) * (graphH / 100));
+      if (x === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
     }
     ctx.stroke();
 
     // FEC Limit horizontal line at 3.8e-3 threshold
-    const fecY = h * 0.42;
+    const fecY = padTop + graphH * 0.42;
     ctx.strokeStyle = '#ff5252';
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
-    ctx.moveTo(0, fecY); ctx.lineTo(w, fecY);
+    ctx.moveTo(padLeft, fecY); ctx.lineTo(padLeft + graphW, fecY);
     ctx.stroke();
     ctx.setLineDash([]);
 
     ctx.fillStyle = '#ff5252';
     ctx.font = '9px "JetBrains Mono", monospace';
-    ctx.fillText('FEC LIMIT 3.8e-3', w - 105, fecY - 4);
-
-    // Live Readout overlay inside canvas
-    ctx.fillStyle = '#4edea3';
-    ctx.font = '10px "JetBrains Mono", monospace';
-    ctx.fillText(`BER: ${currentBer < 1e-4 ? currentBer.toExponential(2) : currentBer.toFixed(4)} | OSNR: ${currentOsnr.toFixed(1)}dB`, 10, 18);
+    ctx.textAlign = 'right';
+    ctx.fillText('FEC LIMIT 3.8e-3', padLeft + graphW - 10, fecY - 4);
   }
 
   // Event Log Terminal

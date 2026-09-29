@@ -502,43 +502,52 @@
         <div class="flex items-center justify-between border-b border-outline pb-2">
           <div class="flex items-center gap-2">
             <span class="material-symbols-outlined text-secondary">memory</span>
-            <h3 class="font-head font-bold text-sm text-on-surface">HARDWARE LIMITS & LATENCY</h3>
+            <h3 class="font-head font-bold text-sm text-on-surface">HARDWARE LATENCY CONTROLLER</h3>
           </div>
-          <button id="btn-apply-hw" class="px-2.5 py-1 bg-secondary text-background font-bold text-xs rounded cursor-pointer hover:opacity-90">APPLY HW</button>
+          <button id="btn-apply-hw" class="px-2.5 py-1 bg-secondary text-background font-bold text-xs rounded cursor-pointer hover:opacity-90">APPLY LATENCY</button>
         </div>
 
-        <div class="space-y-3 text-xs font-mono">
-          <div>
-            <div class="flex justify-between"><span>MAX SLEW VELOCITY:</span><strong id="hw-max-vel-disp" class="text-secondary">2.5 rad/s</strong></div>
-            <input type="range" id="hw-max-vel" min="0.5" max="5.0" step="0.1" value="2.5" class="w-full accent-secondary cursor-pointer">
-          </div>
-          <div>
-            <div class="flex justify-between"><span>MAX SLEW ACCELERATION:</span><strong id="hw-max-acc-disp" class="text-secondary">8.0 rad/s²</strong></div>
-            <input type="range" id="hw-max-acc" min="1.0" max="20.0" step="0.5" value="8.0" class="w-full accent-secondary cursor-pointer">
-          </div>
-          <div>
-            <div class="flex justify-between"><span>HARDWARE LATENCY:</span><strong id="hw-latency-disp" class="text-secondary">2 frames</strong></div>
+        <div class="space-y-4 text-xs font-mono">
+          <!-- Main Latency Slider -->
+          <div class="space-y-1 bg-surface-container p-3 border border-outline rounded">
+            <div class="flex justify-between font-bold">
+              <span>HARDWARE DELAY / LATENCY:</span>
+              <strong id="hw-latency-disp" class="text-secondary">2 frames (66.0 ms)</strong>
+            </div>
             <input type="range" id="hw-latency" min="0" max="10" step="1" value="2" class="w-full accent-secondary cursor-pointer">
+            <div class="text-[10px] text-on-surface-variant">Simulates CMOS transport lag & DAC servo actuation delay.</div>
           </div>
 
-          <!-- Hierarchical Reacquisition -->
-          <div class="pt-2 border-t border-outline space-y-2">
-            <div class="flex justify-between items-center">
-              <span class="font-bold">REACQUISITION SEARCH</span>
-              <button id="btn-apply-reacq" class="px-2 py-0.5 bg-surface-container-high border border-outline text-[10px] font-bold rounded cursor-pointer">APPLY REACQ</button>
+          <!-- Real-Time Subsystem Latency Metrics Breakdown -->
+          <div class="space-y-2 pt-1">
+            <span class="font-bold text-on-surface-variant block text-[11px]">SUBSYSTEM TIMING BREAKDOWN:</span>
+            <div class="grid grid-cols-2 gap-2 text-[11px]">
+              <div class="bg-surface-container-low p-2 border border-outline rounded">
+                <span class="text-on-surface-variant block text-[9px]">CMOS DETECTOR</span>
+                <strong class="text-primary font-bold">1.85 ms</strong>
+              </div>
+              <div class="bg-surface-container-low p-2 border border-outline rounded">
+                <span class="text-on-surface-variant block text-[9px]">KF / PF FILTER</span>
+                <strong class="text-primary font-bold">1.20 ms</strong>
+              </div>
+              <div class="bg-surface-container-low p-2 border border-outline rounded">
+                <span class="text-on-surface-variant block text-[9px]">SERVO LOOP</span>
+                <strong class="text-primary font-bold">0.65 ms</strong>
+              </div>
+              <div class="bg-surface-container-low p-2 border border-outline rounded">
+                <span class="text-on-surface-variant block text-[9px]">TOTAL LOOP</span>
+                <strong id="algo-latency-sub" class="text-secondary font-bold">6.20 ms</strong>
+              </div>
             </div>
+          </div>
+
+          <!-- Reacquisition Ellipse Toggle -->
+          <div class="pt-1 flex items-center justify-between border-t border-outline text-[11px]">
             <label class="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" id="chk-pred-search" checked class="accent-secondary cursor-pointer">
-              <span>Enable Tier-1 Predictive Ellipse</span>
+              <span>Enable Tier-1 Predictive Search</span>
             </label>
-            <div>
-              <div class="flex justify-between text-[11px]"><span>TIER-1 BUDGET:</span><strong id="reacq-budget-disp" class="text-secondary">30 frames</strong></div>
-              <input type="range" id="reacq-budget" min="10" max="100" step="5" value="30" class="w-full accent-secondary cursor-pointer">
-            </div>
-            <div>
-              <div class="flex justify-between text-[11px]"><span>ARCHIMEDEAN SCAN RATE:</span><strong id="reacq-rate-disp" class="text-secondary">1.2 rad/s</strong></div>
-              <input type="range" id="reacq-rate" min="0.2" max="3.0" step="0.1" value="1.2" class="w-full accent-secondary cursor-pointer">
-            </div>
+            <span id="reacq-tier-badge" class="px-1.5 py-0.5 bg-secondary-container/20 text-secondary border border-secondary/40 font-bold rounded text-[10px]">ACTIVE</span>
           </div>
         </div>
       </div>
