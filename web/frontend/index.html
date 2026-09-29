@@ -180,7 +180,7 @@
   <main class="flex-1 p-3 overflow-y-auto space-y-4 max-w-[1920px] mx-auto w-full">
 
     <!-- SUMMARY METRICS RIBBON & STATUS CARDS -->
-    <section id="sec-supervisor" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+    <section id="sec-supervisor" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
       <!-- FSM Supervisor State Card -->
       <div id="tracker-mode-card" class="bg-surface border border-outline p-3 rounded flex flex-col justify-between">
         <div class="flex items-center justify-between text-xs text-on-surface-variant font-mono">
@@ -196,6 +196,23 @@
         </div>
         <span id="tracker-mode-val" class="hidden">KF</span>
         <span id="tracker-mode-sub" class="hidden">Kalman Filter</span>
+      </div>
+
+      <!-- System Hardware Latency Card -->
+      <div class="bg-surface border border-outline p-3 rounded flex flex-col justify-between">
+        <div class="text-xs text-on-surface-variant font-mono flex items-center justify-between">
+          <span>SYSTEM LATENCY</span>
+          <span class="text-xs font-mono text-tertiary font-bold">SPEC ≤ 10ms</span>
+        </div>
+        <div class="text-2xl font-mono font-bold text-tertiary mt-1 flex items-baseline justify-between">
+          <span id="card-algo-latency">6.20 ms</span>
+          <span class="text-[10px] text-secondary font-normal font-mono">NOMINAL</span>
+        </div>
+        <div class="text-[9px] text-on-surface-variant font-mono mt-1 flex justify-between border-t border-outline/50 pt-1">
+          <span>CMOS: <strong class="text-primary">1.85ms</strong></span>
+          <span>KF: <strong class="text-primary">1.20ms</strong></span>
+          <span>Servo: <strong class="text-primary">0.65ms</strong></span>
+        </div>
       </div>
 
       <!-- Lock Retention Rate Card -->
@@ -280,8 +297,15 @@
           <div class="flex items-center justify-between pb-2 border-b border-outline mb-2">
             <div class="flex items-center gap-2">
               <span class="material-symbols-outlined text-primary text-lg">radar</span>
-              <h2 class="font-head font-bold text-sm text-on-surface">RADAR & KINEMATICS SPATIAL DISPLAY</h2>
-              <span id="radar-lock-badge" class="px-1.5 py-0.2 bg-secondary-container/20 text-secondary border border-secondary/40 text-xs font-mono rounded">IN BORESIGHT</span>
+              <div>
+                <h2 class="font-head font-bold text-sm text-on-surface">RADAR & KINEMATICS SPATIAL DISPLAY</h2>
+                <div class="text-[10px] font-mono text-primary flex items-center gap-2 mt-0.5">
+                  <span><strong>X-Axis:</strong> Azimuth / Pan (mrad)</span>
+                  <span>•</span>
+                  <span><strong>Y-Axis:</strong> Elevation / Tilt (mrad)</span>
+                </div>
+              </div>
+              <span id="radar-lock-badge" class="px-1.5 py-0.2 bg-secondary-container/20 text-secondary border border-secondary/40 text-xs font-mono rounded ml-1">IN BORESIGHT</span>
             </div>
             <div class="flex items-center gap-3 text-xs font-mono">
               <div id="radar-coords" class="text-on-surface-variant">PAN: +12.00 mrad | TILT: -4.00 mrad</div>
@@ -304,7 +328,14 @@
           <div class="flex items-center justify-between pb-2 border-b border-outline mb-2">
             <div id="camera-card" class="flex items-center gap-2">
               <span id="cam-indicator" class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
-              <h2 id="camera-title-text" class="font-head font-bold text-sm text-on-surface">CMOS SENSOR OPTICAL FEED</h2>
+              <div>
+                <h2 id="camera-title-text" class="font-head font-bold text-sm text-on-surface">CMOS SENSOR OPTICAL FEED</h2>
+                <div class="text-[10px] font-mono text-secondary flex items-center gap-2 mt-0.5">
+                  <span><strong>X-Axis:</strong> Pixel X (px) [0-640]</span>
+                  <span>•</span>
+                  <span><strong>Y-Axis:</strong> Pixel Y (px) [0-480]</span>
+                </div>
+              </div>
             </div>
             <div class="flex items-center gap-2">
               <select id="colormap-select" class="bg-surface-container border border-outline text-[10px] font-mono text-on-surface p-1 rounded cursor-pointer">
@@ -338,11 +369,18 @@
       <div id="sec-oscilloscope" class="grid grid-cols-1 lg:grid-cols-12 gap-4">
 
         <!-- 4-Channel Telemetry Oscilloscope (7 Cols) -->
-        <div class="lg:col-span-7 bg-surface border border-outline p-3 rounded flex flex-col h-[320px]">
+        <div class="lg:col-span-7 bg-surface border border-outline p-3 rounded flex flex-col h-[340px]">
           <div class="flex items-center justify-between pb-2 border-b border-outline mb-2">
             <div class="flex items-center gap-2">
               <span class="material-symbols-outlined text-primary text-base">show_chart</span>
-              <h3 class="font-head font-bold text-sm text-on-surface">TELEMETRY OSCILLOSCOPE (4 CHANNELS)</h3>
+              <div>
+                <h3 class="font-head font-bold text-sm text-on-surface">TELEMETRY OSCILLOSCOPE (4 CHANNELS)</h3>
+                <div class="text-[10px] font-mono text-cyan-300 flex items-center gap-2 mt-0.5">
+                  <span><strong>▶ X-AXIS:</strong> Time t (seconds)</span>
+                  <span>•</span>
+                  <span><strong>▲ Y-AXIS:</strong> Pointing Err (mrad) / Conf (%) / Sev (%) / BER</span>
+                </div>
+              </div>
             </div>
             <div class="flex items-center gap-2 text-xs font-mono">
               <!-- Channel Toggles -->
@@ -366,11 +404,18 @@
         </div>
 
         <!-- Frequency & Spectral Power Density / BER Graph (5 Cols) -->
-        <div class="lg:col-span-5 bg-surface border border-outline p-3 rounded flex flex-col h-[320px]">
+        <div class="lg:col-span-5 bg-surface border border-outline p-3 rounded flex flex-col h-[340px]">
           <div class="flex items-center justify-between pb-2 border-b border-outline mb-2">
             <div class="flex items-center gap-2">
               <span class="material-symbols-outlined text-purple-400 text-base">graphic_eq</span>
-              <h3 class="font-head font-bold text-sm text-on-surface">FREQUENCY & SPECTRAL PSD ANALYSIS</h3>
+              <div>
+                <h3 class="font-head font-bold text-sm text-on-surface">FREQUENCY & SPECTRAL PSD ANALYSIS</h3>
+                <div class="text-[10px] font-mono text-purple-300 flex items-center gap-2 mt-0.5">
+                  <span><strong>▶ X-AXIS:</strong> Turbulence Freq f (Hz) [Log]</span>
+                  <span>•</span>
+                  <span><strong>▲ Y-AXIS:</strong> PSD S_φ(f) (rad²/Hz) [Log]</span>
+                </div>
+              </div>
             </div>
             <div class="text-xs font-mono text-purple-300 font-bold">Kolmogorov f⁻⁵/³ PSD</div>
           </div>
@@ -460,168 +505,8 @@
       </div>
     </section>
 
-    <!-- SECTION 3: SUBSYSTEM HARDWARE, PID, OPTICS & NOISE -->
-    <section id="sec-hardware" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-
-      <!-- Gimbal PID Controller Panel -->
-      <div id="panel-hardware-control" class="bg-surface border border-outline p-4 rounded space-y-3 flex flex-col justify-between">
-        <div class="flex items-center justify-between border-b border-outline pb-2">
-          <div class="flex items-center gap-2">
-            <span class="material-symbols-outlined text-primary">tune</span>
-            <h3 class="font-head font-bold text-sm text-on-surface">GIMBAL SERVO PID CONTROLLER</h3>
-          </div>
-          <button id="btn-apply-pid" class="px-2.5 py-1 bg-primary text-background font-bold text-xs rounded cursor-pointer hover:opacity-90">APPLY PID</button>
-        </div>
-
-        <div class="space-y-3 text-xs font-mono">
-          <div>
-            <div class="flex justify-between"><span>PROPORTIONAL (Kp):</span><strong id="pid-kp-disp" class="text-primary">4.50</strong></div>
-            <input type="range" id="pid-kp" min="0" max="10" step="0.1" value="4.5" class="w-full accent-primary cursor-pointer">
-          </div>
-          <div>
-            <div class="flex justify-between"><span>INTEGRAL (Ki):</span><strong id="pid-ki-disp" class="text-primary">0.80</strong></div>
-            <input type="range" id="pid-ki" min="0" max="5" step="0.05" value="0.8" class="w-full accent-primary cursor-pointer">
-          </div>
-          <div>
-            <div class="flex justify-between"><span>DERIVATIVE (Kd):</span><strong id="pid-kd-disp" class="text-primary">0.35</strong></div>
-            <input type="range" id="pid-kd" min="0" max="2" step="0.02" value="0.35" class="w-full accent-primary cursor-pointer">
-          </div>
-          <div>
-            <div class="flex justify-between"><span>FEEDFORWARD (Kff):</span><strong id="pid-kff-disp" class="text-primary">1.00</strong></div>
-            <input type="range" id="pid-kff" min="0" max="3" step="0.05" value="1.0" class="w-full accent-primary cursor-pointer">
-          </div>
-          <label class="flex items-center gap-2 cursor-pointer pt-1">
-            <input type="checkbox" id="chk-feedforward" checked class="accent-primary cursor-pointer">
-            <span>Enable Kinematic Velocity Feedforward</span>
-          </label>
-        </div>
-      </div>
-
-      <!-- Hardware Dynamics & Latency Panel -->
-      <div class="bg-surface border border-outline p-4 rounded space-y-3 flex flex-col justify-between">
-        <div class="flex items-center justify-between border-b border-outline pb-2">
-          <div class="flex items-center gap-2">
-            <span class="material-symbols-outlined text-secondary">memory</span>
-            <h3 class="font-head font-bold text-sm text-on-surface">HARDWARE LATENCY CONTROLLER</h3>
-          </div>
-          <button id="btn-apply-hw" class="px-2.5 py-1 bg-secondary text-background font-bold text-xs rounded cursor-pointer hover:opacity-90">APPLY LATENCY</button>
-        </div>
-
-        <div class="space-y-4 text-xs font-mono">
-          <!-- Main Latency Slider -->
-          <div class="space-y-1 bg-surface-container p-3 border border-outline rounded">
-            <div class="flex justify-between font-bold">
-              <span>HARDWARE DELAY / LATENCY:</span>
-              <strong id="hw-latency-disp" class="text-secondary">2 frames (66.0 ms)</strong>
-            </div>
-            <input type="range" id="hw-latency" min="0" max="10" step="1" value="2" class="w-full accent-secondary cursor-pointer">
-            <div class="text-[10px] text-on-surface-variant">Simulates CMOS transport lag & DAC servo actuation delay.</div>
-          </div>
-
-          <!-- Real-Time Subsystem Latency Metrics Breakdown -->
-          <div class="space-y-2 pt-1">
-            <span class="font-bold text-on-surface-variant block text-[11px]">SUBSYSTEM TIMING BREAKDOWN:</span>
-            <div class="grid grid-cols-2 gap-2 text-[11px]">
-              <div class="bg-surface-container-low p-2 border border-outline rounded">
-                <span class="text-on-surface-variant block text-[9px]">CMOS DETECTOR</span>
-                <strong class="text-primary font-bold">1.85 ms</strong>
-              </div>
-              <div class="bg-surface-container-low p-2 border border-outline rounded">
-                <span class="text-on-surface-variant block text-[9px]">KF / PF FILTER</span>
-                <strong class="text-primary font-bold">1.20 ms</strong>
-              </div>
-              <div class="bg-surface-container-low p-2 border border-outline rounded">
-                <span class="text-on-surface-variant block text-[9px]">SERVO LOOP</span>
-                <strong class="text-primary font-bold">0.65 ms</strong>
-              </div>
-              <div class="bg-surface-container-low p-2 border border-outline rounded">
-                <span class="text-on-surface-variant block text-[9px]">TOTAL LOOP</span>
-                <strong id="algo-latency-sub" class="text-secondary font-bold">6.20 ms</strong>
-              </div>
-            </div>
-          </div>
-
-          <!-- Reacquisition Ellipse Toggle -->
-          <div class="pt-1 flex items-center justify-between border-t border-outline text-[11px]">
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" id="chk-pred-search" checked class="accent-secondary cursor-pointer">
-              <span>Enable Tier-1 Predictive Search</span>
-            </label>
-            <span id="reacq-tier-badge" class="px-1.5 py-0.5 bg-secondary-container/20 text-secondary border border-secondary/40 font-bold rounded text-[10px]">ACTIVE</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Target Kinematics & Optics / Sensor Noise Panel -->
-      <div id="panel-target-optics" class="bg-surface border border-outline p-4 rounded space-y-3 flex flex-col justify-between">
-        <div class="flex items-center justify-between border-b border-outline pb-2">
-          <div class="flex items-center gap-2">
-            <span class="material-symbols-outlined text-tertiary">photo_camera</span>
-            <h3 class="font-head font-bold text-sm text-on-surface">OPTICS & SENSOR NOISE</h3>
-          </div>
-          <button id="btn-apply-motion" class="px-2.5 py-1 bg-tertiary text-background font-bold text-xs rounded cursor-pointer hover:opacity-90">APPLY MOTION</button>
-        </div>
-
-        <div class="space-y-3 text-xs font-mono">
-          <!-- Motion Type Select -->
-          <div class="space-y-1">
-            <label class="block text-[11px] text-on-surface-variant">TARGET TRAJECTORY PROFILE:</label>
-            <select id="motion-type-select" class="w-full bg-surface-container border border-outline text-on-surface p-1.5 rounded cursor-pointer">
-              <option value="ORBITAL">ORBITAL (LEO Circular Horizon Pass)</option>
-              <option value="SPIRAL">SPIRAL (Expanding Archimedean Sweep)</option>
-              <option value="MANEUVER">MANEUVER (High-g Hypersonic Zigzag)</option>
-              <option value="SINE_JITTER">SINE_JITTER (Sinusoidal Platform Oscillation)</option>
-            </select>
-          </div>
-
-          <!-- Target Switch Select -->
-          <div class="space-y-1">
-            <label class="block text-[11px] text-on-surface-variant">PRIMARY TRACKED TARGET ID:</label>
-            <select id="target-switch-select" class="w-full bg-surface-container border border-outline text-on-surface p-1.5 rounded cursor-pointer">
-              <option value="LEO-FSOC-04">LEO-FSOC-04 (Primary Optical Beacon)</option>
-              <option value="GEO-RELAY-01">GEO-RELAY-01 (Secondary Feeder Link)</option>
-            </select>
-          </div>
-
-          <div class="flex items-center gap-4 pt-1">
-            <label class="flex items-center gap-1.5 cursor-pointer">
-              <input type="checkbox" id="chk-auto-exposure" checked class="accent-tertiary cursor-pointer">
-              <span>Auto-Exposure AGC</span>
-            </label>
-            <label class="flex items-center gap-1.5 cursor-pointer">
-              <input type="checkbox" id="chk-signature-verif" class="accent-tertiary cursor-pointer">
-              <span>Blinking Signature</span>
-            </label>
-          </div>
-
-          <!-- Sensor Noise Injection -->
-          <div class="pt-2 border-t border-outline space-y-2">
-            <div class="flex justify-between items-center">
-              <span class="font-bold">SENSOR NOISE INJECTION</span>
-              <button id="btn-apply-noise" class="px-2 py-0.5 bg-surface-container-high border border-outline text-[10px] font-bold rounded cursor-pointer">APPLY NOISE</button>
-            </div>
-            <div class="flex items-center gap-3 text-[11px]">
-              <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" id="noise-chk-gaussian" checked class="accent-tertiary cursor-pointer"> Gaussian</label>
-              <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" id="noise-chk-poisson" class="accent-tertiary cursor-pointer"> Poisson</label>
-              <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" id="noise-chk-saltpepper" class="accent-tertiary cursor-pointer"> Salt&Pepper</label>
-            </div>
-            <div>
-              <div class="flex justify-between text-[11px]"><span>GAUSSIAN STD:</span><strong id="noise-std-disp" class="text-tertiary">0.050</strong></div>
-              <input type="range" id="noise-std-input" min="0" max="0.2" step="0.005" value="0.05" class="w-full accent-tertiary cursor-pointer">
-            </div>
-            <div>
-              <div class="flex justify-between text-[11px]"><span>POISSON SHOT NOISE:</span><strong id="noise-poisson-disp" class="text-tertiary">10 e-</strong></div>
-              <input type="range" id="noise-poisson-input" min="1" max="50" step="1" value="10" class="w-full accent-tertiary cursor-pointer">
-            </div>
-            <div>
-              <div class="flex justify-between text-[11px]"><span>SALT & PEPPER RATIO:</span><strong id="noise-sp-disp" class="text-tertiary">1.0%</strong></div>
-              <input type="range" id="noise-sp-input" min="0" max="0.05" step="0.002" value="0.01" class="w-full accent-tertiary cursor-pointer">
-            </div>
-          </div>
-        </div>
-      </div>
-
-    </section>
+    <!-- SECTION 3: SUBSYSTEM HARDWARE, PID, OPTICS & NOISE (REMOVED) -->
+    <section id="sec-hardware" class="hidden"></section>
 
     <!-- SECTION 4: PERFORMANCE METRICS & SUBSYSTEM PROFILER -->
     <section id="sec-metrics" class="bg-surface border border-outline p-4 rounded space-y-4">

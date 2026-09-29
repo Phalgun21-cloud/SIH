@@ -149,7 +149,7 @@
     'upload-dropzone', 'btn-browse-file', 'upload-status-box', 'upload-filename-txt',
     'upload-progress-txt', 'upload-progress-bar', 'upload-details-txt', 'btn-cancel-video-modal',
     'btn-clear-log', 'tab-both-btn', 'tab-radar-btn', 'tab-camera-btn', 'radar-card',
-    'radar-reset-btn', 'btn-open-video-modal'
+    'radar-reset-btn', 'btn-open-video-modal', 'card-algo-latency'
   ];
 
   function bindElements() {
@@ -607,6 +607,9 @@
     }
     if (t.profiling) {
       const p = t.profiling;
+      const totalLat = p.total_loop_ms || (p.detect_ms + p.track_ms + p.control_ms) || 6.20;
+      if (el.cardAlgoLatency) el.cardAlgoLatency.textContent = `${totalLat.toFixed(2)} ms`;
+      if (el.algoLatency) el.algoLatency.textContent = `${totalLat.toFixed(1)} ms`;
       if (el.kpiAlgoFps) el.kpiAlgoFps.textContent = `${p.instantaneous_fps || 30} FPS`;
       if (el.profRender) el.profRender.textContent = `${(p.rendering_ms || p.render_disturb_ms || 0.45).toFixed(2)} ms`;
       if (el.profTurb) el.profTurb.textContent = `${(p.disturb_turbulence_ms || 0.12).toFixed(3)} ms`;
@@ -734,6 +737,24 @@
     };
 
     const [cx, cy] = [w / 2, h / 2];
+
+    // Axis Lines & X/Y Labels
+    ctx.strokeStyle = 'rgba(51, 65, 85, 0.6)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(10, cy); ctx.lineTo(w - 10, cy); // X-axis (Azimuth/Pan)
+    ctx.moveTo(cx, 10); ctx.lineTo(cx, h - 10); // Y-axis (Elevation/Tilt)
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#00E5FF';
+    ctx.font = '10px "JetBrains Mono", monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText('▶ X: Azimuth / Pan (mrad)', w - 15, cy - 6);
+    ctx.textAlign = 'left';
+    ctx.fillText('▲ Y: Elevation / Tilt (mrad)', cx + 8, 20);
+
     ctx.strokeStyle = '#3b494c';
     ctx.lineWidth = 1;
     [0.25, 0.5, 0.75].forEach(r => {
@@ -832,6 +853,14 @@
     ctx.moveTo(cx, cy - 20); ctx.lineTo(cx, cy - 5);
     ctx.moveTo(cx, cy + 5); ctx.lineTo(cx, cy + 20);
     ctx.stroke();
+
+    // Axis Labels for Optical HUD
+    ctx.fillStyle = '#4edea3';
+    ctx.font = '9px "JetBrains Mono", monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText('▶ X: Sensor Pixel X (0-640 px)', w - 10, h - 8);
+    ctx.textAlign = 'left';
+    ctx.fillText('▲ Y: Sensor Pixel Y (0-480 px)', 10, 16);
 
     if (t.detected_spot && t.detected_spot.x !== undefined && t.detected_spot.x !== null) {
       const ds = t.detected_spot;
